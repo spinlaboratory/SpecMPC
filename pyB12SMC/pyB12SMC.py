@@ -11,17 +11,23 @@ import serial
 import serial.tools.list_ports
 import time
 
+MAX_ATTEMPTS = 10
 class SMC:
-    def __init__(self, port: str = None, baud_rate = 250000, write_timeout = 0, timeout = 1):
-        self.autoConnectSMCSerialPort(port, baud_rate, write_timeout, timeout)
-        self.axis = ['X', 'Y', 'Z', 'E']
-        self.types = ['r', 'l', 'l', 'l'] # r: rotational, l: linear
+    def __init__(self, port: str = None, baud_rate = 250000, write_timeout = 0, timeout = 1, axis: list[str] = ['X', 'Y', 'Z', 'E'], axis_types: list[str] = ['r', 'l', 'l', 'l']):
+        self.__autoConnectSMCSerialPort(port, baud_rate, write_timeout, timeout)
+        self.axis = axis
+        self.types = axis_types # r: rotational, l: linear
         self.positions = self.position()
         self.feedrates = self.feedrate() # unit per second
         self.resolutions = self.steps_per_unit() # step per unit
         self.currents = self.current() # mA
+        print('Stepper motor controller is connected')
 
     def help(self):
+        """
+        Print the complete list of commands
+        
+        """
         print('Current available commands:')
         print('move(axis, position), move an axis linearly')
         print('theta(axis, position), rotate an axis, position is between -360 to 360')
@@ -38,15 +44,24 @@ class SMC:
         print('info(), return all information')
 
     def info(self):
+        """
+        Print the information of all axis.
+        
+        """
         for axis in self.axis:
             print('%s current position: %s' %(axis, self.positions[axis]))
             print('%s feedrate: %s' %(axis, self.feedrates[axis]))
             print('%s steps/unit: %s' %(axis, self.resolutions[axis]))
             print('%s current: %s mA' %(axis, self.currents[axis]))
 
-    def move(self, axis, position):
+    def move(self, axis: str, position: float|int):
         '''
-        Linearly control one axis
+        Linearly control one axis.
+
+        Args:
+            axis (str): the axis to control
+            position (str): the position to move
+
         '''
         if axis not in self.axis:
             print('Please provide correct axis.')
@@ -59,13 +74,18 @@ class SMC:
         self.send_command('G0 %s%s'%(axis, position))
         feedrate = self.feedrates[axis]
         difference = abs(self.positions[axis] - position)
-        time.sleep(difference/feedrate + 1)
+        time.sleep(difference/feedrate + 0.2)
         self.positions = self.position()
         return
 
-    def theta(self, axis, position):
+    def theta(self, axis: str, theta: float|int):
         '''
         Rotationally control one axis
+
+        Args:
+            axis (str): the axis to control
+            theta (float or int): the degree to move to
+
         '''
         if axis not in self.axis:
             print('Please provide correct axis.')
@@ -75,21 +95,28 @@ class SMC:
             print('Axis type does not match.')
             return
 
-        if position > 360 or position < -360:
+        if theta > 360 or theta < -360:
             print('position is out of range')
             return
         
-        self.send_command('G0 %s%s'%(axis, position))
+        self.send_command('G0 %s%s'%(axis, theta))
         feedrate = self.feedrates[axis]
-        difference = abs(self.positions[axis] - position)
+        difference = abs(self.positions[axis] - theta)
         time.sleep(difference/feedrate + 0.2)
         self.positions = self.position()
         return
     
-    def feedrate(self, axis = None, feedrate = None):
+    def feedrate(self, axis: str|None = None, feedrate: float|int|None = None):
         '''
         Set or read current feedrate
-        
+
+        Args:
+            axis (str or None): the axis to control
+            feedrate (float, int or None): the maximum feedrate of an axis. If None, return feedrate_detail.
+
+        Returns:
+            feedrate_detail (dict): the maximum feedrate of all axis
+
         '''
         if feedrate is not None:
             if not axis or axis not in self.axis: 
@@ -108,10 +135,16 @@ class SMC:
             return feedrate_detail
         
 
-    def position(self, axis = None, position = None):
+    def position(self, axis: str| None = None, position: float|int|None = None):
         '''
         Set or read current position
-        
+
+        Args:
+            axis (str or None): the axis to control
+            position (float, int or None): the position of an axis in a unit. If None, return position_detail.
+
+        Returns:
+            position_detail (dict): the current position of all axis
         '''
         if position is not None:
             if not axis or axis not in self.axis: 
@@ -134,10 +167,13 @@ class SMC:
             time.sleep(0.2)
             return position_detail
     
-    def home(self, axis = None):
+    def home(self, axis: str|None = None):
         '''
         Recover to home position
-        
+
+        Args:
+            axis (str or None): the axis to recover from home. If None, recover all axis.
+            
         '''
         if not axis:
             for axis in self.axis:
@@ -157,7 +193,14 @@ class SMC:
                 print('Axis type is not supported.')
                 return False
     
-    def set_home(self, axis = None):
+    def set_home(self, axis: str|None = None):
+        '''
+        Set current position as home position
+
+        Args:
+            axis (str or None): the axis to set new home. If None, set current positions as home for all axis.
+            
+        '''
         if not axis:
             for axis in self.axis:
                 self.position(axis, 0)
@@ -165,9 +208,17 @@ class SMC:
             self.position(axis, 0)
             return
         
-    def current(self, axis = None, current = None):
+    def current(self, axis: str|None = None, current: float|int|None = None):
         '''
         Set or read stepper motor currents in milliamps units.
+
+        Args:
+            axis (str or None): the axis to control
+            current (float, int or None): the current of an axis in a mA. If None, return current settings.
+
+        Returns:
+            currents (dict): the current settings of all axis
+
         '''
         if current is not None:
             if not axis or axis not in self.axis: 
@@ -178,15 +229,22 @@ class SMC:
             self.currents[axis] = current
         
 
-        currents = self.send_command('M906', True, lines = 4).replace(' driver current: ', '').split('\n')
+        currents = self.send_command('M906', True).replace(' driver current: ', '').split('\n')
         currents = {axis: float(current.replace(axis, '')) for axis, current in zip(self.axis, currents)}   
         return currents
 
-    def steps_per_unit(self, axis = None, step = None):
+    def steps_per_unit(self, axis: str|None = None, step: float|int|None = None):
         '''
         This setting affects how many steps will be done for each unit of movement.
 
         Please be notified that the calculation for this value involves the default microsteps value of 16 in the factory settings.
+
+        Args:
+            axis (str or None): the axis to control
+            step (float, int or None): the step of an axis in unit. If None, return resolutions settings.
+
+        Returns:
+            resolutions (dict): the steps/unit settings of all axis
 
         '''
         if step is not None:
@@ -222,8 +280,42 @@ class SMC:
         '''
         self.send_command('M502')
         return
+    
+    def send_command(self, command: str, recv: bool = False):
+        """
+        Send commands to controller directly.
 
-    def autoConnectSMCSerialPort(self, port, baud_rate, write_timeout, timeout):
+        Args:
+            command (str): the command sent to smc
+            recv (bool): if True, it will return the string
+
+        Return:
+            from_mps_string (str): the query string
+        
+        """
+        self.ser.reset_input_buffer()  # reset and flush buffer
+        send_string = "%s\n" % command
+        send_bytes = send_string.encode("utf-8")
+        self.ser.write(send_bytes)
+        time.sleep(0.1)
+        if recv == True:
+                attempts = 0
+                from_mps_string = ''
+                while attempts < MAX_ATTEMPTS:
+                    from_mps_bytes = self.ser.readline()
+                    try:
+                        if attempts == 0:
+                            from_mps_string += from_mps_bytes.decode("utf-8").rstrip()
+                        else:
+                            if 'ok' in from_mps_bytes.decode("utf-8").rstrip():
+                                return from_mps_string
+                            from_mps_string += '\n' + from_mps_bytes.decode("utf-8").rstrip()
+                    except:
+                        print('Warning: the decode is not working appropriately.')
+                    attempts += 1
+                return RuntimeError('Maximum attempts reached')
+        
+    def __autoConnectSMCSerialPort(self, port, baud_rate, write_timeout, timeout):
         device_list = []
         if port:
             device_list.append(port)
@@ -244,29 +336,8 @@ class SMC:
         
         raise ConnectionError('No stepper motor controller is found.')
     
-    def send_command(self, command, recv = False, lines = 1):
-        self.ser.reset_input_buffer()  # reset and flush buffer
-        send_string = "%s\n" % command
-        send_bytes = send_string.encode("utf-8")
-        self.ser.write(send_bytes)
-        time.sleep(0.1)
-        if recv == True:
-                i = 0
-                from_mps_string = ''
-                while i < lines:
-                    from_mps_bytes = self.ser.readline()
-                    try:
-                        if i == 0:
-                            from_mps_string += from_mps_bytes.decode("utf-8").rstrip()
-                        else:
-                            from_mps_string += '\n' + from_mps_bytes.decode("utf-8").rstrip()
-                    except:
-                        print('Warning: the decode is not working appropriately.')
-                    i += 1
-                return from_mps_string
     def __del__(self):
         if self.ser.is_open:
-            # self.send_command('G0 X0')
             self.ser.close()
                 
 if __name__ == "__main__":
