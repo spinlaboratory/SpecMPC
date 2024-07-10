@@ -21,6 +21,7 @@ class SMC:
         self.feedrates = self.feedrate() # unit per second
         self.resolutions = self.steps_per_unit() # step per unit
         self.currents = self.current() # mA
+        self.relative_mode = self.relative() # movement
         print('Stepper motor controller is connected')
 
     def help(self):
@@ -42,12 +43,14 @@ class SMC:
         print('reset(), reset all configurable settings to their factory defaults. This only changes the settings in memory, not on EEPROM')
         print('send_command(commands, recv, lines), send command to controller directly.')
         print('info(), return all information')
+        print('relative(enable): change movement between relative and absolute')
 
     def info(self):
         """
         Print the information of all axis.
         
         """
+        print('Movement Mode: Relative') if self.relative_mode else print('Movement Mode: Absolute')
         for axis in self.axis:
             print('%s current position: %s' %(axis, self.positions[axis]))
             print('%s feedrate: %s' %(axis, self.feedrates[axis]))
@@ -63,6 +66,8 @@ class SMC:
             position (str): the position to move
 
         '''
+        self.relative(self.relative_mode)
+
         if axis not in self.axis:
             print('Please provide correct axis.')
             return
@@ -73,7 +78,7 @@ class SMC:
         
         self.send_command('G0 %s%s'%(axis, position))
         feedrate = self.feedrates[axis]
-        difference = abs(self.positions[axis] - position)
+        difference = abs(position) if self.relative_mode else abs(self.positions[axis] - position)
         time.sleep(difference/feedrate + 0.2)
         self.positions = self.position()
         return
@@ -87,6 +92,8 @@ class SMC:
             theta (float or int): the degree to move to
 
         '''
+        self.relative(self.relative_mode)
+
         if axis not in self.axis:
             print('Please provide correct axis.')
             return
@@ -95,13 +102,14 @@ class SMC:
             print('Axis type does not match.')
             return
 
-        if theta > 360 or theta < -360:
+        check = theta + self.positions[axis] if self.relative_mode else theta
+        if check > 360 or check < -360:
             print('position is out of range')
             return
         
         self.send_command('G0 %s%s'%(axis, theta))
         feedrate = self.feedrates[axis]
-        difference = abs(self.positions[axis] - theta)
+        difference = abs(theta) if self.relative_mode else abs(self.positions[axis] - theta)
         time.sleep(difference/feedrate + 0.2)
         self.positions = self.position()
         return
@@ -280,6 +288,24 @@ class SMC:
         '''
         self.send_command('M502')
         return
+    
+    def relative(self, enable: bool = False):
+        '''
+        Set the movement relative or absolute.
+
+        Args:
+            enable (bool): if True, the movement is relative.
+
+        Returns:
+            bool: True for relative and False for absolute
+
+        '''
+        if enable:
+            self.send_command("G91")
+            return True
+        else:
+            self.send_command("G90")
+            return False
     
     def send_command(self, command: str, recv: bool = False):
         """
