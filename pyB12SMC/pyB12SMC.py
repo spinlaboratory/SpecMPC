@@ -102,8 +102,7 @@ class SMC:
             print('Axis type does not match.')
             return
 
-        check = theta + self.positions[axis] if self.relative_mode else theta
-        if check > 360 or check < -360:
+        if not self.relative_mode and (theta < -360 or theta > 360):
             print('position is out of range')
             return
         
@@ -111,7 +110,11 @@ class SMC:
         feedrate = self.feedrates[axis]
         difference = abs(theta) if self.relative_mode else abs(self.positions[axis] - theta)
         time.sleep(difference/feedrate + 0.2)
+        if self.relative_mode:
+            self.positions[axis] += theta 
+            self.position(axis, self.positions[axis])
         self.positions = self.position()
+
         return
     
     def feedrate(self, axis: str|None = None, feedrate: float|int|None = None):
