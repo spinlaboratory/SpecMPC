@@ -12,7 +12,7 @@ setuptools.setup(
     version=__version__,
     author='Bridge12 Technologies, Inc',
     author_email='yhuang@bridge12.com',
-    description='A python package for interfacing with Stepper Motor Controller (BIGTREETECH SKR MINI E3 V3.0) used in Bridge 12 Technologies products.',
+    description='A Python package for interfacing with Stepper Motor Controller (BIGTREETECH SKR MINI E3 V3.0) used in Bridge12 products.',
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='http://www.bridge12.com/',

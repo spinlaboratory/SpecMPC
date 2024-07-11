@@ -2,11 +2,10 @@
 
 pyB12SMC is a python package for interfacing with Stepper Motor Controller (BIGTREETECH SKR MINI E3 V3.0) used in Bridge 12 Technologies products.
 
-The controller can do:
+The stepper motor controller is used to:
 
-1. Move the rod (such as Iris) linearly.
-
-2. Spin the motor (such Goniometer) rotationally. 
+1. Move the iris rod of an EPR probe linearly (Z axis)
+2. Turn a goniometer (X axis) 
 
 ### Requirements ###
 
@@ -15,9 +14,9 @@ The controller can do:
 
 ### Communicating with the Bridge12 SMC ###
 
-First make sure the B12T products with a stepper motor controller installed is connected to the computer via a USB cable and the system is powered ON.
+First, make sure the B12T product (e.g. probe, goniometer, etc.) is properly installed and connected to the controller. Connect the controller to the computer via a USB cable, and power ON the system.
 
-In a terminal window, start a python environment
+In a terminal window (command window), start a Python environment
 
 ```console
 python
