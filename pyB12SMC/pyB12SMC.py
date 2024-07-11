@@ -289,7 +289,7 @@ class SMC:
         self.send_command('M502')
         return
     
-    def relative(self, enable: bool = False):
+    def relative(self, enable: bool|None = None):
         '''
         Set the movement relative or absolute.
 
@@ -300,12 +300,17 @@ class SMC:
             bool: True for relative and False for absolute
 
         '''
+        if enable is None:
+            return self.relative_mode
+         
         if enable:
             self.send_command("G91")
-            return True
+            self.relative_mode = True
+            return self.relative_mode
         else:
             self.send_command("G90")
-            return False
+            self.relative_mode = False
+            return self.relative_mode
     
     def send_command(self, command: str, recv: bool = False):
         """
