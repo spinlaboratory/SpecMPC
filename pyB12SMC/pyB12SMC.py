@@ -373,6 +373,9 @@ class SMC:
                         print('Warning: the decode is not working appropriately.')
                     attempts += 1
                 return RuntimeError('Maximum attempts reached')
+
+    def specman_connect(self, initval: float):
+        return 'Acknowledged specman connection',True
         
     def __autoConnectSMCSerialPort(self, port, baud_rate, write_timeout, timeout):
         device_list = []
