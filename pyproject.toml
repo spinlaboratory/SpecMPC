@@ -26,6 +26,7 @@ dependencies = [
 
 [project.scripts]
 pySMC = "pySMC.cli:main"
+pySMC-gui = "pySMC.gui:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
