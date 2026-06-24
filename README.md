@@ -1,6 +1,6 @@
 # README #
 
-pyB12SMC is a python package for interfacing with Stepper Motor Controller (BIGTREETECH SKR MINI E3 V3.0) used in Bridge 12 Technologies products.
+pySMC is a python package for interfacing with Stepper Motor Controller (BIGTREETECH SKR MINI E3 V3.0) used in Bruker BioSpin products.
 
 The stepper motor controller is used to:
 
@@ -12,9 +12,9 @@ The stepper motor controller is used to:
 * Python3 (>= 3.10)
 * numpy, pySerial
 
-### Communicating with the Bridge12 SMC ###
+### Communicating with the SMC ###
 
-First, make sure the B12T product (e.g. probe, goniometer, etc.) is properly installed and connected to the controller. Connect the controller to the computer via a USB cable, and power ON the system.
+First, make sure the product (e.g. probe, goniometer, etc.) is properly installed and connected to the controller. Connect the controller to the computer via a USB cable, and power ON the system.
 
 In a terminal window (command window), start a Python environment
 
@@ -23,9 +23,9 @@ python
 ```
 
 ```python
-import pyB12SMC
+import pySMC
 
-smc = pyB12SMC.SMC()
+smc = pySMC.SMC()
 ```
 
 The controller will be connected.
@@ -45,9 +45,9 @@ smc.theta('X', 15) # move the X-axis plate rotationally by 15 degree
 ### Example Script ###
 
 ```python
-import pyB12SMC
+import pySMC
 
-smc = pyB12SMC.SMC()
+smc = pySMC.SMC()
 smc.help() # print available commands
 smc.info() # print current stepper motor details
 smc.theta('X', 30) # move the X-axis plate rotationally by 30 degree

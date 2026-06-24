@@ -13,7 +13,7 @@ import time
 
 MAX_ATTEMPTS = 10
 class SMC:
-    def __init__(self, port: str = None, baud_rate = 250000, write_timeout = 0, timeout = 1, axis: list[str] = ['X', 'Y', 'Z', 'E'], axis_types: list[str] = ['r', 'l', 'l', 'l']):
+    def __init__(self, port: str = None, baud_rate = 250000, write_timeout = 0, timeout = 1, axis: list[str] = ['X', 'Y', 'Z', 'E'], axis_types: list[str] = ['r', 'l', 'l', 'l'], verbose = 0):
         self.__autoConnectSMCSerialPort(port, baud_rate, write_timeout, timeout)
         self.axis = axis
         self.types = axis_types # r: rotational, l: linear
@@ -21,8 +21,10 @@ class SMC:
         self.feedrates = self.feedrate() # unit per second
         self.resolutions = self.steps_per_unit() # step per unit
         self.currents = self.current() # mA
-        self.relative_mode = self.relative() # movement
-        print('Stepper motor controller is connected')
+        self.relative_mode = False # movement
+        self.verbose = verbose
+        if self.verbose >= 1:
+            print('Stepper motor controller is connected')
 
     def help(self):
         """
@@ -45,19 +47,23 @@ class SMC:
         print('info(), return all information')
         print('relative(enable): change movement between relative and absolute')
 
-    def info(self):
+    def __repr__(self):
         """
         Print the information of all axis.
         
         """
-        print('Movement Mode: Relative') if self.relative_mode else print('Movement Mode: Absolute')
+        s = ''
+        s += 'Movement Mode: Relative\n' if self.relative_mode else 'Movement Mode: Absolute\n'
+        # print('Movement Mode: Relative') if self.relative_mode else print('Movement Mode: Absolute')
         for axis in self.axis:
-            print('%s current position: %s' %(axis, self.positions[axis]))
-            print('%s feedrate: %s' %(axis, self.feedrates[axis]))
-            print('%s steps/unit: %s' %(axis, self.resolutions[axis]))
-            print('%s current: %s mA' %(axis, self.currents[axis]))
+            s += '%s current position: %s\n' %(axis, self.positions[axis])
+            s += '%s feedrate: %s\n' %(axis, self.feedrates[axis])
+            s += '%s steps/unit: %s\n' %(axis, self.resolutions[axis])
+            s += '%s current: %s mA\n' %(axis, self.currents[axis])
 
-    def move(self, axis: str, position: float|int):
+        return s
+    
+    def move(self, axis: str, position: float|int|str):
         '''
         Linearly control one axis.
 
@@ -66,22 +72,30 @@ class SMC:
             position (str): the position to move
 
         '''
+        # try:
+        #     position = float(position)
+        # except ValueError as e:
+        #     #logger.error(log here)
+        #     print('position needs to be a valid float')
+        #     return 
         self.relative(self.relative_mode)
 
         if axis not in self.axis:
-            print('Please provide correct axis.')
-            return
+            if self.verbose >= 1:
+                print('Please provide correct axis.')
+            return False
         
         if self.types[self.axis.index(axis)] != 'l':
-            print('Axis type does not match.')
-            return
+            if self.verbose >= 1:
+                print('Axis type does not match.')
+            return False
         
         self.send_command('G0 %s%s'%(axis, position))
         feedrate = self.feedrates[axis]
         difference = abs(position) if self.relative_mode else abs(self.positions[axis] - position)
         time.sleep(difference/feedrate + 0.2)
         self.positions = self.position()
-        return
+        return True
 
     def theta(self, axis: str, theta: float|int):
         '''
@@ -95,17 +109,20 @@ class SMC:
         self.relative(self.relative_mode)
 
         if axis not in self.axis:
-            print('Please provide correct axis.')
-            return
+            if self.verbose >= 1:
+                print('Please provide correct axis.')
+            return False
         
         if self.types[self.axis.index(axis)]  != 'r':
-            print('Axis type does not match.')
-            return
+            if self.verbose >= 1:
+                print('Axis type does not match.')
+            return False
 
         if not self.relative_mode and (theta < -360 or theta > 360):
-            print('position is out of range')
-            return
-        
+            if self.verbose >= 1:
+                print('position is out of range')
+            return False
+         
         self.send_command('G0 %s%s'%(axis, theta))
         feedrate = self.feedrates[axis]
         difference = abs(theta) if self.relative_mode else abs(self.positions[axis] - theta)
@@ -115,7 +132,7 @@ class SMC:
             self.position(axis, self.positions[axis])
         self.positions = self.position()
 
-        return
+        return True
     
     def feedrate(self, axis: str|None = None, feedrate: float|int|None = None):
         '''
@@ -131,12 +148,14 @@ class SMC:
         '''
         if feedrate is not None:
             if not axis or axis not in self.axis: 
-                print('Please provide correct axis.')
-                return
-            
+                if self.verbose >= 1:
+                    print('Please provide correct axis.')
+                return False
+             
             if axis == 'X' and (feedrate >= 15 or feedrate <= 0):
-                print('X axis feedrate cannot exceed 15 or lower than 0')
-                return
+                if self.verbose >= 1:
+                    print('X axis feedrate cannot exceed 15 or lower than 0')
+                return False
             self.send_command('M203 %s%s'%(axis, feedrate))
             self.feedrates[axis] = feedrate
             
@@ -159,8 +178,9 @@ class SMC:
         '''
         if position is not None:
             if not axis or axis not in self.axis: 
-                print('Please provide correct axis.')
-                return
+                if self.verbose >= 1:
+                    print('Please provide correct axis.')
+                return False
             self.send_command('G92 %s%s'%(axis, position))
             time.sleep(0.2)
             self.positions[axis] = position
@@ -189,7 +209,9 @@ class SMC:
         if not axis:
             for axis in self.axis:
                 if not self.home(axis):
-                    print(axis, 'homing fails')
+                    if self.verbose >= 1:
+                        print(axis, 'homing fails')
+                    return False
             
         else:
             axis_type = self.types[self.axis.index(axis)]
@@ -201,7 +223,8 @@ class SMC:
                 self.theta(axis, 0)
                 return True
             else:
-                print('Axis type is not supported.')
+                if self.verbose >= 1:
+                    print('Axis type is not supported.')
                 return False
     
     def set_home(self, axis: str|None = None):
@@ -215,9 +238,10 @@ class SMC:
         if not axis:
             for axis in self.axis:
                 self.position(axis, 0)
+            return True
         else:
             self.position(axis, 0)
-            return
+            return True
         
     def current(self, axis: str|None = None, current: float|int|None = None):
         '''
@@ -233,13 +257,13 @@ class SMC:
         '''
         if current is not None:
             if not axis or axis not in self.axis: 
-                print('Please provide correct axis.')
-                return
+                if self.verbose >= 1:
+                    print('Please provide correct axis.')
+                return False
             
             self.send_command('M906 %s%s'%(axis, current))
             self.currents[axis] = current
         
-
         currents = self.send_command('M906', True).replace(' driver current: ', '').split('\n')
         currents = {axis: float(current.replace(axis, '')) for axis, current in zip(self.axis, currents)}   
         return currents
@@ -260,13 +284,14 @@ class SMC:
         '''
         if step is not None:
             if not axis or axis not in self.axis: 
-                print('Please provide correct axis.')
-                return
-            
+                if self.verbose >= 1:
+                    print('Please provide correct axis.')
+                return False
+             
             self.send_command('M92 %s%s'%(axis, step))
             self.resolutions[axis] = step
-        else:
 
+        else:
             steps = self.send_command('M92', True).strip().split(' ')[1:] # remove M203 as the first return element
             resolutions = {axis: float(step.replace(axis, '')) for axis, step in zip(self.axis, steps)}   
             return resolutions
@@ -276,21 +301,21 @@ class SMC:
         Save all configurable settings to EEPROM.
         '''
         self.send_command('M500')
-        return
+        return True
 
     def restore(self):
         '''
         Load all saved settings from EEPROM.
         '''
         self.send_command('M501')
-        return
+        return True
     
     def reset(self):
         '''
         Reset all configurable settings to their factory defaults. This only changes the settings in memory, not on EEPROM.
         '''
         self.send_command('M502')
-        return
+        return True
     
     def relative(self, enable: bool|None = None):
         '''
@@ -348,6 +373,9 @@ class SMC:
                         print('Warning: the decode is not working appropriately.')
                     attempts += 1
                 return RuntimeError('Maximum attempts reached')
+
+    def specman_connect(self, initval: float):
+        return 'Acknowledged specman connection',True
         
     def __autoConnectSMCSerialPort(self, port, baud_rate, write_timeout, timeout):
         device_list = []
@@ -360,18 +388,18 @@ class SMC:
                 if port.vid == 1155 or port.pid == 22336:
                     device_list.append(port.device)
             
+        self.ser = None
         for device in device_list:
             try:
                 self.ser = serial.Serial(device, baud_rate, write_timeout = write_timeout, timeout = timeout)
                 self.ser.reset_input_buffer()
-                return
+                return True
             except:
-                print('Connection fails on port %s' %port.device)
+                raise ConnectionError('No stepper motor controller is found on port %s' %port.device)
         
-        raise ConnectionError('No stepper motor controller is found.')
     
     def __del__(self):
-        if self.ser.is_open:
+        if self.ser and self.ser.is_open:
             self.ser.close()
                 
 if __name__ == "__main__":
