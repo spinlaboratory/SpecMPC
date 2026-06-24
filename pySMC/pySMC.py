@@ -10,6 +10,7 @@ Date: 06/24/2026
 import serial
 import serial.tools.list_ports
 import time
+from typing import List, Optional, Union
 
 MAX_ATTEMPTS = 10
 
@@ -44,7 +45,7 @@ class SMC:
     resolution, current, and movement mode.
     """
 
-    def __init__(self, port: str = None, baud_rate = 250000, write_timeout = 0, timeout = 1, axis: list[str]|None = None, axis_types: list[str]|None = None, verbose = 0):
+    def __init__(self, port: str = None, baud_rate = 250000, write_timeout = 0, timeout = 1, axis: Optional[List[str]] = None, axis_types: Optional[List[str]] = None, verbose = 0):
         """
         Connect to the controller and initialize cached axis settings.
 
@@ -167,7 +168,7 @@ class SMC:
         """
         return self.status()
     
-    def move(self, axis: str, position: float|int|str):
+    def move(self, axis: str, position: Union[float, int, str]):
         '''
         Move a linear axis to a target position.
 
@@ -208,7 +209,7 @@ class SMC:
         self.positions = self.position()
         return True
 
-    def theta(self, axis: str, theta: float|int|str):
+    def theta(self, axis: str, theta: Union[float, int, str]):
         '''
         Rotate a rotational axis to a target angle.
 
@@ -258,7 +259,7 @@ class SMC:
 
         return True
     
-    def feedrate(self, axis: str|None = None, feedrate: float|int|None = None):
+    def feedrate(self, axis: Optional[str] = None, feedrate: Optional[Union[float, int]] = None):
         '''
         Read all feedrates or set the feedrate for one axis.
 
@@ -292,7 +293,7 @@ class SMC:
             return feedrate_detail
         
 
-    def position(self, axis: str| None = None, position: float|int|None = None):
+    def position(self, axis: Optional[str] = None, position: Optional[Union[float, int]] = None):
         '''
         Read all axis positions or set the current position of one axis.
 
@@ -327,7 +328,7 @@ class SMC:
             time.sleep(0.2)
             return position_detail
     
-    def home(self, axis: str|None = None):
+    def home(self, axis: Optional[str] = None):
         '''
         Move one or all axes back to their configured home position.
 
@@ -366,7 +367,7 @@ class SMC:
                     print('Axis type is not supported.')
                 return False
     
-    def set_home(self, axis: str|None = None):
+    def set_home(self, axis: Optional[str] = None):
         '''
         Set the current position as home for one or all axes.
 
@@ -387,7 +388,7 @@ class SMC:
         else:
             return self.position(axis, 0) is not False
         
-    def current(self, axis: str|None = None, current: float|int|None = None):
+    def current(self, axis: Optional[str] = None, current: Optional[Union[float, int]] = None):
         '''
         Read all motor currents or set the current for one axis.
 
@@ -414,7 +415,7 @@ class SMC:
         currents = {axis: float(current.replace(axis, '')) for axis, current in zip(self.axis, currents)}   
         return currents
 
-    def steps_per_unit(self, axis: str|None = None, step: float|int|None = None):
+    def steps_per_unit(self, axis: Optional[str] = None, step: Optional[Union[float, int]] = None):
         '''
         Read all resolutions or set steps per unit for one axis.
 
@@ -479,7 +480,7 @@ class SMC:
         self.send_command('M502')
         return True
     
-    def relative(self, enable: bool|None = None):
+    def relative(self, enable: Optional[bool] = None):
         '''
         Read or set the controller movement mode.
 
