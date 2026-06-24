@@ -10,9 +10,10 @@ Date: 06/24/2026
 import serial
 import serial.tools.list_ports
 import time
+import re
 from typing import List, Optional, Union
 
-MAX_ATTEMPTS = 10
+MAX_ATTEMPTS = 50
 
 
 def _to_float(value, name):
@@ -33,6 +34,29 @@ def _to_float(value, name):
         return float(value)
     except (TypeError, ValueError) as error:
         raise ValueError(f'{name} must be a number') from error
+
+
+def _parse_homing_sensitivity_response(response, axes):
+    """
+    Parse an ``M914`` homing sensitivity response.
+
+    Args:
+        response: Controller response text, for example
+            ``"Y homing sensitivity: 8\\r\\nZ homing sensitivity: 25"``.
+        axes: Axis names expected by this controller.
+
+    Returns:
+        A dictionary containing all expected axes. Axes missing from the
+        response are assigned ``0``.
+    """
+    sensitivities = {axis: 0 for axis in axes}
+    for line in response.splitlines():
+        match = re.search(r'^\s*([A-Za-z])\s+homing sensitivity:\s*([-+]?\d+(?:\.\d+)?)', line)
+        if match:
+            axis = match.group(1).upper()
+            if axis in sensitivities:
+                sensitivities[axis] = float(match.group(2))
+    return sensitivities
 
 
 class SMC:
@@ -77,6 +101,7 @@ class SMC:
         self.types = axis_types # r: rotational, l: linear
         self.positions = self.position()
         self.feedrates = self.feedrate() # unit per second
+        self.homing_sensitivities = self.homing_sensitivity()
         self.resolutions = self.steps_per_unit() # step per unit
         self.currents = self.current() # mA
         self.relative_mode = False # movement
@@ -97,6 +122,7 @@ class SMC:
             ('move AXIS POSITION', 'Move a linear axis.'),
             ('theta AXIS DEGREE', 'Rotate an axis.'),
             ('feedrate [AXIS FEEDRATE]', 'Read or set feedrate.'),
+            ('homing_sensitivity [AXIS VALUE]', 'Read or set homing sensitivity.'),
             ('current [AXIS CURRENT_MA]', 'Read or set motor current.'),
             ('steps_per_unit [AXIS STEPS]', 'Read or set steps per unit.'),
             ('position [AXIS POSITION]', 'Read or set position.'),
@@ -143,6 +169,7 @@ class SMC:
         for axis in self.axis:
             s += '%s current position: %s\n' %(axis, self.positions[axis])
             s += '%s feedrate: %s\n' %(axis, self.feedrates[axis])
+            s += '%s homing sensitivity: %s\n' %(axis, self.homing_sensitivities[axis])
             s += '%s steps/unit: %s\n' %(axis, self.resolutions[axis])
             s += '%s current: %s mA\n' %(axis, self.currents[axis])
 
@@ -292,6 +319,31 @@ class SMC:
             feedrate_detail = {axis: float(feedrate.replace(axis, '')) for axis, feedrate in zip(self.axis, feedrates)}               
             return feedrate_detail
         
+    def homing_sensitivity(self, axis: Optional[str] = None, sensitivity: Optional[Union[float, int]] = None):
+        '''
+        Read all homing sensitivities or set the value for one axis.
+
+        Args:
+            axis: Axis name to update. Required when ``sensitivity`` is provided.
+            sensitivity: Homing sensitivity value to set. If omitted, all
+                homing sensitivities are queried from the controller.
+
+        Returns:
+            A dictionary of homing sensitivities when reading values, ``False``
+            for an invalid axis, otherwise ``None`` after a successful write.
+
+        '''
+        if sensitivity is not None:
+            if not axis or axis not in self.axis:
+                if self.verbose >= 1:
+                    print('Please provide correct axis.')
+                return False
+            self.send_command('M914 %s%s'%(axis, sensitivity))
+            self.homing_sensitivities[axis] = sensitivity
+
+        else:
+            return _parse_homing_sensitivity_response(self.send_command('M914', True), self.axis)
+
 
     def position(self, axis: Optional[str] = None, position: Optional[Union[float, int]] = None):
         '''
