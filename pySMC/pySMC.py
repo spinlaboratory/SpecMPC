@@ -10,10 +10,68 @@ Date: 06/24/2026
 import serial
 import serial.tools.list_ports
 import time
+from typing import List, Optional, Union
 
 MAX_ATTEMPTS = 10
+
+
+def _to_float(value, name):
+    """
+    Convert a numeric input value to ``float``.
+
+    Args:
+        value: Value supplied by the caller.
+        name: Argument name used in the error message.
+
+    Returns:
+        Converted floating-point value.
+
+    Raises:
+        ValueError: If the value cannot be converted to ``float``.
+    """
+    try:
+        return float(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f'{name} must be a number') from error
+
+
 class SMC:
-    def __init__(self, port: str = None, baud_rate = 250000, write_timeout = 0, timeout = 1, axis: list[str] = ['X', 'Y', 'Z', 'E'], axis_types: list[str] = ['r', 'l', 'l', 'l'], verbose = 0):
+    """
+    Serial interface for a Stepper Motor Controller running Marlin G-code.
+
+    The class wraps common controller operations such as movement, homing,
+    status queries, and EEPROM settings. It opens a serial connection during
+    initialization and keeps cached copies of axis position, feedrate,
+    resolution, current, and movement mode.
+    """
+
+    def __init__(self, port: str = None, baud_rate = 250000, write_timeout = 0, timeout = 1, axis: Optional[List[str]] = None, axis_types: Optional[List[str]] = None, verbose = 0):
+        """
+        Connect to the controller and initialize cached axis settings.
+
+        Args:
+            port: Serial port name such as ``"COM3"``. If omitted, pySMC
+                attempts to auto-detect the controller.
+            baud_rate: Serial baud rate used for the connection.
+            write_timeout: Serial write timeout in seconds.
+            timeout: Serial read timeout in seconds.
+            axis: Axis names managed by the controller.
+            axis_types: Axis type for each axis, where ``"r"`` is rotational
+                and ``"l"`` is linear.
+            verbose: Console output level. Values greater than or equal to 1
+                print connection and validation messages.
+
+        Raises:
+            ConnectionError: If no controller can be found or opened.
+        """
+        self.ser = None
+        if axis is None:
+            axis = ['X', 'Y', 'Z', 'E']
+        if axis_types is None:
+            axis_types = ['r', 'l', 'l', 'l']
+        if len(axis) != len(axis_types):
+            raise ValueError('axis and axis_types must have the same length')
+
         self.__autoConnectSMCSerialPort(port, baud_rate, write_timeout, timeout)
         self.axis = axis
         self.types = axis_types # r: rotational, l: linear
@@ -28,29 +86,56 @@ class SMC:
 
     def help(self):
         """
-        Print the complete list of commands
-        
+        Print a compact command reference for the interactive control panel.
+
+        The output uses the same command syntax accepted by the ``pySMC``
+        terminal command, for example ``move Z 0.8`` or ``relative true``.
         """
-        print('Current available commands:')
-        print('move(axis, position), move an axis linearly')
-        print('theta(axis, position), rotate an axis, position is between -360 to 360')
-        print('feedrate(axis, feedrate (unit/second)), set a feedrate to an axis or return all axis feedrates with not input arguments')
-        print('current(axis, current (mA)), set a current to an axis or return all axis current settings with not input arguments')
-        print('steps_per_unit(axis, position), set a steps/unit value to an axis or return all axis steps/unit values with not input arguments')
-        print('position(axis, position), set a position to an axis or return all axis current positions with not input arguments')
-        print('home(axis), home an axis if the input is provided, otherwise home all axis')
-        print('set_home(axis), set current position of an axis as home if the input is provided, otherwise set current positions of all axis home')
-        print('save(), save all configurable settings to EEPROM')
-        print('restore(), load all saved settings from EEPROM')
-        print('reset(), reset all configurable settings to their factory defaults. This only changes the settings in memory, not on EEPROM')
-        print('send_command(commands, recv, lines), send command to controller directly.')
-        print('info(), return all information')
-        print('relative(enable): change movement between relative and absolute')
+        commands = [
+            ('status', 'Show movement mode, position, feedrate, steps/unit, and current.'),
+            ('info', 'Alias for status.'),
+            ('move AXIS POSITION', 'Move a linear axis.'),
+            ('theta AXIS DEGREE', 'Rotate an axis.'),
+            ('feedrate [AXIS FEEDRATE]', 'Read or set feedrate.'),
+            ('current [AXIS CURRENT_MA]', 'Read or set motor current.'),
+            ('steps_per_unit [AXIS STEPS]', 'Read or set steps per unit.'),
+            ('position [AXIS POSITION]', 'Read or set position.'),
+            ('home [AXIS]', 'Home all axes or one axis.'),
+            ('set_home [AXIS]', 'Set current position as home.'),
+            ('relative [true|false]', 'Read or set relative movement mode.'),
+            ('send_command COMMAND [RECV]', 'Send raw G-code.'),
+            ('save', 'Save settings to EEPROM.'),
+            ('restore', 'Load settings from EEPROM.'),
+            ('reset', 'Reset settings in memory.'),
+            ('exit', 'Leave the control panel.'),
+        ]
+        examples = [
+            'move Z 0.8',
+            'theta X 15',
+            'feedrate Z 5',
+            'send_command M114 true',
+        ]
+
+        print('pySMC control panel')
+        print('')
+        print('Usage:')
+        print('  command [arguments]')
+        print('')
+        print('Commands:')
+        for command, description in commands:
+            print(f'  {command:<31} {description}')
+        print('')
+        print('Examples:')
+        for example in examples:
+            print(f'  {example}')
 
     def __repr__(self):
         """
-        Print the information of all axis.
-        
+        Return a human-readable summary of the current cached controller state.
+
+        Returns:
+            A multi-line string containing movement mode, position, feedrate,
+            steps/unit, and current for each configured axis.
         """
         s = ''
         s += 'Movement Mode: Relative\n' if self.relative_mode else 'Movement Mode: Absolute\n'
@@ -62,22 +147,49 @@ class SMC:
             s += '%s current: %s mA\n' %(axis, self.currents[axis])
 
         return s
+
+    def status(self):
+        """
+        Return the current cached controller status.
+
+        Returns:
+            The same multi-line string produced by ``repr(smc)``.
+        """
+        return str(self)
+
+    def info(self):
+        """
+        Return the current cached controller status.
+
+        This is an alias for :meth:`status`.
+
+        Returns:
+            The same multi-line string produced by ``status()``.
+        """
+        return self.status()
     
-    def move(self, axis: str, position: float|int|str):
+    def move(self, axis: str, position: Union[float, int, str]):
         '''
-        Linearly control one axis.
+        Move a linear axis to a target position.
 
         Args:
-            axis (str): the axis to control
-            position (str): the position to move
+            axis: Axis name to move.
+            position: Target position. In absolute mode this is the controller
+                coordinate to move to; in relative mode this is the distance to
+                move from the current position.
+
+        Returns:
+            ``True`` when the command is accepted, or ``False`` when the axis
+            is invalid or not configured as linear.
 
         '''
-        # try:
-        #     position = float(position)
-        # except ValueError as e:
-        #     #logger.error(log here)
-        #     print('position needs to be a valid float')
-        #     return 
+        try:
+            position = _to_float(position, 'position')
+        except ValueError as error:
+            if self.verbose >= 1:
+                print(error)
+            return False
+
         self.relative(self.relative_mode)
 
         if axis not in self.axis:
@@ -97,15 +209,28 @@ class SMC:
         self.positions = self.position()
         return True
 
-    def theta(self, axis: str, theta: float|int):
+    def theta(self, axis: str, theta: Union[float, int, str]):
         '''
-        Rotationally control one axis
+        Rotate a rotational axis to a target angle.
 
         Args:
-            axis (str): the axis to control
-            theta (float or int): the degree to move to
+            axis: Axis name to rotate.
+            theta: Target angle in degrees. In absolute mode, values must be
+                between -360 and 360. In relative mode, this is the angle to
+                move from the current position.
+
+        Returns:
+            ``True`` when the command is accepted, or ``False`` when the axis
+            is invalid, not rotational, or outside the allowed range.
 
         '''
+        try:
+            theta = _to_float(theta, 'theta')
+        except ValueError as error:
+            if self.verbose >= 1:
+                print(error)
+            return False
+
         self.relative(self.relative_mode)
 
         if axis not in self.axis:
@@ -134,16 +259,19 @@ class SMC:
 
         return True
     
-    def feedrate(self, axis: str|None = None, feedrate: float|int|None = None):
+    def feedrate(self, axis: Optional[str] = None, feedrate: Optional[Union[float, int]] = None):
         '''
-        Set or read current feedrate
+        Read all feedrates or set the feedrate for one axis.
 
         Args:
-            axis (str or None): the axis to control
-            feedrate (float, int or None): the maximum feedrate of an axis. If None, return feedrate_detail.
+            axis: Axis name to update. Required when ``feedrate`` is provided.
+            feedrate: Maximum feedrate to set in controller units per second.
+                If omitted, all feedrates are queried from the controller.
 
         Returns:
-            feedrate_detail (dict): the maximum feedrate of all axis
+            A dictionary of feedrates when reading values, ``False`` for an
+            invalid axis or invalid X-axis feedrate, otherwise ``None`` after a
+            successful write.
 
         '''
         if feedrate is not None:
@@ -165,16 +293,18 @@ class SMC:
             return feedrate_detail
         
 
-    def position(self, axis: str| None = None, position: float|int|None = None):
+    def position(self, axis: Optional[str] = None, position: Optional[Union[float, int]] = None):
         '''
-        Set or read current position
+        Read all axis positions or set the current position of one axis.
 
         Args:
-            axis (str or None): the axis to control
-            position (float, int or None): the position of an axis in a unit. If None, return position_detail.
+            axis: Axis name to update. Required when ``position`` is provided.
+            position: Coordinate to assign to the current axis position. If
+                omitted, positions are queried from the controller.
 
         Returns:
-            position_detail (dict): the current position of all axis
+            A dictionary of current positions when reading values, ``False``
+            for an invalid axis, otherwise ``None`` after a successful write.
         '''
         if position is not None:
             if not axis or axis not in self.axis: 
@@ -198,12 +328,16 @@ class SMC:
             time.sleep(0.2)
             return position_detail
     
-    def home(self, axis: str|None = None):
+    def home(self, axis: Optional[str] = None):
         '''
-        Recover to home position
+        Move one or all axes back to their configured home position.
 
         Args:
-            axis (str or None): the axis to recover from home. If None, recover all axis.
+            axis: Axis name to home. If omitted, all configured axes are homed.
+
+        Returns:
+            ``True`` when homing succeeds, or ``False`` if an axis is invalid
+            or has an unsupported axis type.
             
         '''
         if not axis:
@@ -212,8 +346,14 @@ class SMC:
                     if self.verbose >= 1:
                         print(axis, 'homing fails')
                     return False
+            return True
             
         else:
+            if axis not in self.axis:
+                if self.verbose >= 1:
+                    print('Please provide correct axis.')
+                return False
+
             axis_type = self.types[self.axis.index(axis)]
             if axis_type == 'l':
                 self.move(axis, 0)
@@ -227,32 +367,39 @@ class SMC:
                     print('Axis type is not supported.')
                 return False
     
-    def set_home(self, axis: str|None = None):
+    def set_home(self, axis: Optional[str] = None):
         '''
-        Set current position as home position
+        Set the current position as home for one or all axes.
 
         Args:
-            axis (str or None): the axis to set new home. If None, set current positions as home for all axis.
+            axis: Axis name to update. If omitted, all configured axes are set
+                to position zero.
+
+        Returns:
+            ``True`` after the position reset command is sent, or ``False`` if
+            an invalid axis is supplied.
             
         '''
         if not axis:
             for axis in self.axis:
-                self.position(axis, 0)
+                if self.position(axis, 0) is False:
+                    return False
             return True
         else:
-            self.position(axis, 0)
-            return True
+            return self.position(axis, 0) is not False
         
-    def current(self, axis: str|None = None, current: float|int|None = None):
+    def current(self, axis: Optional[str] = None, current: Optional[Union[float, int]] = None):
         '''
-        Set or read stepper motor currents in milliamps units.
+        Read all motor currents or set the current for one axis.
 
         Args:
-            axis (str or None): the axis to control
-            current (float, int or None): the current of an axis in a mA. If None, return current settings.
+            axis: Axis name to update. Required when ``current`` is provided.
+            current: Motor current in milliamps. If omitted, all motor currents
+                are queried from the controller.
 
         Returns:
-            currents (dict): the current settings of all axis
+            A dictionary of motor currents after reading or writing values, or
+            ``False`` for an invalid axis.
 
         '''
         if current is not None:
@@ -268,18 +415,22 @@ class SMC:
         currents = {axis: float(current.replace(axis, '')) for axis, current in zip(self.axis, currents)}   
         return currents
 
-    def steps_per_unit(self, axis: str|None = None, step: float|int|None = None):
+    def steps_per_unit(self, axis: Optional[str] = None, step: Optional[Union[float, int]] = None):
         '''
-        This setting affects how many steps will be done for each unit of movement.
+        Read all resolutions or set steps per unit for one axis.
 
-        Please be notified that the calculation for this value involves the default microsteps value of 16 in the factory settings.
+        This setting controls how many stepper motor steps are used for each
+        unit of motion. The value should account for the controller firmware's
+        microstep setting.
 
         Args:
-            axis (str or None): the axis to control
-            step (float, int or None): the step of an axis in unit. If None, return resolutions settings.
+            axis: Axis name to update. Required when ``step`` is provided.
+            step: Steps per unit to write. If omitted, all resolutions are
+                queried from the controller.
 
         Returns:
-            resolutions (dict): the steps/unit settings of all axis
+            A dictionary of steps/unit values when reading values, ``False``
+            for an invalid axis, otherwise ``None`` after a successful write.
 
         '''
         if step is not None:
@@ -298,34 +449,49 @@ class SMC:
         
     def save(self):
         '''
-        Save all configurable settings to EEPROM.
+        Save current configurable settings to controller EEPROM.
+
+        Returns:
+            ``True`` after the save command is sent.
         '''
         self.send_command('M500')
         return True
 
     def restore(self):
         '''
-        Load all saved settings from EEPROM.
+        Reload saved configurable settings from controller EEPROM.
+
+        Returns:
+            ``True`` after the restore command is sent.
         '''
         self.send_command('M501')
         return True
     
     def reset(self):
         '''
-        Reset all configurable settings to their factory defaults. This only changes the settings in memory, not on EEPROM.
+        Reset configurable settings in memory to firmware defaults.
+
+        This does not write to EEPROM. Use :meth:`save` after resetting if the
+        defaults should persist after power cycling.
+
+        Returns:
+            ``True`` after the reset command is sent.
         '''
         self.send_command('M502')
         return True
     
-    def relative(self, enable: bool|None = None):
+    def relative(self, enable: Optional[bool] = None):
         '''
-        Set the movement relative or absolute.
+        Read or set the controller movement mode.
 
         Args:
-            enable (bool): if True, the movement is relative.
+            enable: ``True`` enables relative movement, ``False`` enables
+                absolute movement, and ``None`` returns the cached mode without
+                sending a command.
 
         Returns:
-            bool: True for relative and False for absolute
+            ``True`` when relative mode is active, or ``False`` when absolute
+            mode is active.
 
         '''
         if enable is None:
@@ -342,14 +508,20 @@ class SMC:
     
     def send_command(self, command: str, recv: bool = False):
         """
-        Send commands to controller directly.
+        Send a raw command string to the controller.
 
         Args:
-            command (str): the command sent to smc
-            recv (bool): if True, it will return the string
+            command: G-code or controller command to send.
+            recv: If ``True``, read and return controller response lines until
+                an ``ok`` response is received or the retry limit is reached.
 
-        Return:
-            from_mps_string (str): the query string
+        Returns:
+            The controller response string when ``recv`` is ``True``. Returns
+            ``None`` when no response is requested.
+
+        Raises:
+            RuntimeError: If the retry limit is reached while waiting for a
+                controller response.
         
         """
         self.ser.reset_input_buffer()  # reset and flush buffer
@@ -372,34 +544,63 @@ class SMC:
                     except:
                         print('Warning: the decode is not working appropriately.')
                     attempts += 1
-                return RuntimeError('Maximum attempts reached')
+                raise RuntimeError('Maximum attempts reached')
 
     def specman_connect(self, initval: float):
+        """
+        Return a simple acknowledgement for SpecMan integration checks.
+
+        Args:
+            initval: Initial value supplied by the external SpecMan caller.
+
+        Returns:
+            A tuple containing an acknowledgement message and ``True``.
+        """
         return 'Acknowledged specman connection',True
         
     def __autoConnectSMCSerialPort(self, port, baud_rate, write_timeout, timeout):
-        device_list = []
-        if port:
-            device_list.append(port)
+        """
+        Open the serial connection to the controller.
+
+        Args:
+            port: Serial port name or port object. If ``None``, connected ports
+                are scanned for the expected controller USB identifiers.
+            baud_rate: Serial baud rate.
+            write_timeout: Serial write timeout in seconds.
+            timeout: Serial read timeout in seconds.
+
+        Returns:
+            ``True`` when the serial port opens successfully.
+
+        Raises:
+            ConnectionError: If no controller port is found or the serial port
+            cannot be opened.
+        """
         
-        if not device_list:
+        if port is None: # auto detection
             ports = list(serial.tools.list_ports.comports())
-            for port in ports:
-                if port.vid == 1155 or port.pid == 22336:
-                    device_list.append(port.device)
-            
-        self.ser = None
-        for device in device_list:
-            try:
-                self.ser = serial.Serial(device, baud_rate, write_timeout = write_timeout, timeout = timeout)
-                self.ser.reset_input_buffer()
-                return True
-            except:
-                raise ConnectionError('No stepper motor controller is found on port %s' %port.device)
+            for p in ports:
+                if p.vid == 1155 or p.pid == 22336:
+                    port = p.device
+        
+        if port is None:
+            raise ConnectionError('Please connect stepper motor controller or specify the port')
+
+        try:
+            self.ser = serial.Serial(port, baud_rate, write_timeout = write_timeout, timeout = timeout)
+            self.ser.reset_input_buffer()
+            return True
+        except Exception as error:
+            port_name = getattr(port, 'device', port)
+            raise ConnectionError('No stepper motor controller is found on port %s' %port_name) from error
+        
         
     
     def __del__(self):
-        if self.ser and self.ser.is_open:
+        """
+        Close the serial port when the object is garbage-collected.
+        """
+        if getattr(self, 'ser', None) and self.ser.is_open:
             self.ser.close()
                 
 if __name__ == "__main__":
