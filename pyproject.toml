@@ -10,7 +10,7 @@ authors = [
 ]
 description = "A Python package for interfacing with Stepper Motor Controller (BIGTREETECH SKR MINI E3 V3.0) used in Bruker product."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -23,6 +23,9 @@ dependencies = [
 
 [project.urls]
 "Source Code" = "https://github.com/spinlaboratory/pySMC"
+
+[project.scripts]
+pySMC = "pySMC.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
