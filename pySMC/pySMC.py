@@ -1,11 +1,11 @@
 '''
-This is a package to control a stepper motor using G code. The stepper motor controller has been implemented with B12T-Marlin firmware. 
+This is a package to control a stepper motor using G code. The stepper motor controller has been implemented with customized Marlin firmware. 
 
-Company: Bridge 12 Technologies, Inc
+Company: Bruker BioSpin
 
 Author: Yen-Chun Huang
 
-Date: 07/09/2024
+Date: 06/24/2026
 '''
 import serial
 import serial.tools.list_ports

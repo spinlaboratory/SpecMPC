@@ -1,2 +1,2 @@
-from .pyB12SMC import *
+from .pySMC import *
 from .version import __version__
