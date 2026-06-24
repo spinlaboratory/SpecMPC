@@ -3,21 +3,20 @@ import setuptools
 with open('README.md','r') as f:
     long_description = f.read()
 
-with open("pyB12SMC/version.py", "r") as f:
+with open("pySMC/version.py", "r") as f:
     # Define __version__
     exec(f.read())
 
 setuptools.setup(
-    name='pyB12SMC',
+    name='pySMC',
     version=__version__,
-    author='Bridge12 Technologies, Inc',
-    author_email='yhuang@bridge12.com',
+    author='Bruker BioSpin',
+    author_email='yen-chun.huang@bruker.com',
     description='A Python package for interfacing with Stepper Motor Controller (BIGTREETECH SKR MINI E3 V3.0) used in Bridge12 products.',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='http://www.bridge12.com/',
     project_urls={
-        'Source Code':'https://github.com/Bridge12Technologies/pyB12SMC',
+        'Source Code':'https://github.com/spinlaboratory/pySMC',
         },
     packages=setuptools.find_packages(),
     classifiers=[
@@ -25,6 +24,6 @@ setuptools.setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
     ],
-    python_requires='>=3.10',
+    python_requires='>=3.9',
     install_requires=['numpy >= 1.26.2', 'pyserial >= 3.5'],
 )
