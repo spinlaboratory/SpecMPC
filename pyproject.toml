@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pySMC"
+dynamic = ["version"]
+authors = [
+    { name = "Bruker BioSpin", email = "yen-chun.huang@bruker.com" },
+]
+description = "A Python package for interfacing with Stepper Motor Controller (BIGTREETECH SKR MINI E3 V3.0) used in Bruker product."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy >= 1.26.2",
+    "pyserial >= 3.5",
+]
+
+[project.urls]
+"Source Code" = "https://github.com/spinlaboratory/pySMC"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.dynamic]
+version = { attr = "pySMC.version.__version__" }
