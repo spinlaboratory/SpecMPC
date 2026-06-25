@@ -85,6 +85,14 @@ You can pre-fill the connection settings from the command line:
 pySMC-gui -p COM3 -b 96000
 ```
 
+The GUI attempts to connect automatically when it opens. By default, the port
+selector uses `Auto`, which lets pySMC detect the controller. To open the GUI
+without connecting automatically:
+
+```console
+pySMC-gui --no-auto-connect
+```
+
 The GUI provides controls for:
 
 - Connecting and disconnecting from the controller.

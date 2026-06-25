@@ -12,6 +12,7 @@ from .version import __version__
 DEFAULT_BAUD_RATE = 250000
 DEFAULT_WRITE_TIMEOUT = 0
 DEFAULT_TIMEOUT = 1
+AUTO_PORT_LABEL = 'Auto'
 
 
 class SMCGui(tk.Tk):
@@ -22,7 +23,7 @@ class SMCGui(tk.Tk):
     background thread so long-running moves do not block the interface.
     """
 
-    def __init__(self, port=None, baud_rate=DEFAULT_BAUD_RATE, write_timeout=DEFAULT_WRITE_TIMEOUT, timeout=DEFAULT_TIMEOUT):
+    def __init__(self, port=None, baud_rate=DEFAULT_BAUD_RATE, write_timeout=DEFAULT_WRITE_TIMEOUT, timeout=DEFAULT_TIMEOUT, auto_connect=True):
         """
         Create the GUI and optionally pre-fill connection settings.
 
@@ -31,6 +32,7 @@ class SMCGui(tk.Tk):
             baud_rate: Initial baud rate value.
             write_timeout: Initial serial write timeout in seconds.
             timeout: Initial serial read timeout in seconds.
+            auto_connect: If ``True``, attempt to connect after the GUI opens.
         """
         super().__init__()
         self.title('pySMC Control Panel')
@@ -41,7 +43,7 @@ class SMCGui(tk.Tk):
         self.busy = False
         self.advanced_window = None
 
-        self.port_var = tk.StringVar(value=port or '')
+        self.port_var = tk.StringVar(value=port or AUTO_PORT_LABEL)
         self.baud_var = tk.StringVar(value=str(baud_rate))
         self.write_timeout_var = tk.StringVar(value=str(write_timeout))
         self.timeout_var = tk.StringVar(value=str(timeout))
@@ -62,6 +64,8 @@ class SMCGui(tk.Tk):
         self._build_ui()
         self._refresh_ports()
         self._set_controls_enabled(False)
+        if auto_connect:
+            self.after(200, self._connect)
 
     def _build_ui(self):
         """
@@ -273,9 +277,9 @@ class SMCGui(tk.Tk):
         Refresh the serial port dropdown from currently available ports.
         """
         ports = [port.device for port in serial.tools.list_ports.comports()]
-        self.port_combo['values'] = ports
-        if not self.port_var.get() and ports:
-            self.port_var.set(ports[0])
+        self.port_combo['values'] = [AUTO_PORT_LABEL] + ports
+        if not self.port_var.get():
+            self.port_var.set(AUTO_PORT_LABEL)
 
     def _connect(self):
         """
@@ -287,7 +291,9 @@ class SMCGui(tk.Tk):
             self._disconnect()
 
         try:
-            port = self.port_var.get() or None
+            port = self.port_var.get()
+            if not port or port == AUTO_PORT_LABEL:
+                port = None
             baud_rate = int(self.baud_var.get())
             write_timeout = float(self.write_timeout_var.get())
             timeout = float(self.timeout_var.get())
@@ -884,6 +890,7 @@ def build_parser():
     parser.add_argument('-b', '--baud-rate', type=int, default=DEFAULT_BAUD_RATE, help='Serial baud rate. Defaults to 250000.')
     parser.add_argument('--write-timeout', type=float, default=DEFAULT_WRITE_TIMEOUT, help='Serial write timeout in seconds. Defaults to 0.')
     parser.add_argument('--timeout', type=float, default=DEFAULT_TIMEOUT, help='Serial read timeout in seconds. Defaults to 1.')
+    parser.add_argument('--no-auto-connect', action='store_true', help='Open the GUI without automatically connecting.')
     parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
     return parser
 
@@ -902,6 +909,7 @@ def main(argv=None):
         baud_rate=args.baud_rate,
         write_timeout=args.write_timeout,
         timeout=args.timeout,
+        auto_connect=not args.no_auto_connect,
     )
     app.mainloop()
 
