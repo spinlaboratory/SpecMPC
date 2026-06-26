@@ -13,6 +13,8 @@ DEFAULT_BAUD_RATE = 250000
 DEFAULT_WRITE_TIMEOUT = 0
 DEFAULT_TIMEOUT = 1
 AUTO_PORT_LABEL = 'Auto'
+LINEAR_STEP_VALUES = ('0.1', '0.5', '1')
+ROTATION_STEP_VALUES = ('0.1', '0.5', '1', '5', '10')
 
 
 class SMCGui(tk.Tk):
@@ -64,6 +66,7 @@ class SMCGui(tk.Tk):
         self._build_ui()
         self._refresh_ports()
         self._set_controls_enabled(False)
+        self._update_motion_button_layout()
         if auto_connect:
             self.after(200, self._connect)
 
@@ -149,15 +152,29 @@ class SMCGui(tk.Tk):
         self.position_label.grid(row=1, column=0, sticky='w', pady=(8, 0))
         self.position_entry = ttk.Entry(frame, textvariable=self.position_var, width=12)
         self.position_entry.grid(row=1, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
-        self.move_button = ttk.Button(frame, text='Move', command=self._move)
-        self.move_button.grid(row=1, column=2, padx=(8, 0), pady=(8, 0))
+        self.position_step_combo = ttk.Combobox(frame, textvariable=self.position_var, values=LINEAR_STEP_VALUES, width=12, state='readonly')
+        self.move_button_frame = ttk.Frame(frame)
+        self.move_button_frame.grid(row=1, column=2, padx=(8, 0), pady=(8, 0))
+        self.move_down_button = ttk.Button(self.move_button_frame, text='↓', width=3, command=lambda: self._move_step(-1))
+        self.move_down_button.grid(row=0, column=0)
+        self.move_button = ttk.Button(self.move_button_frame, text='Move', command=self._move)
+        self.move_button.grid(row=0, column=1)
+        self.move_up_button = ttk.Button(self.move_button_frame, text='↑', width=3, command=lambda: self._move_step(1))
+        self.move_up_button.grid(row=0, column=2)
 
         self.theta_label = ttk.Label(frame, text='Angle deg')
         self.theta_label.grid(row=2, column=0, sticky='w', pady=(8, 0))
         self.theta_entry = ttk.Entry(frame, textvariable=self.theta_var, width=12)
         self.theta_entry.grid(row=2, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
-        self.theta_button = ttk.Button(frame, text='Rotate', command=self._theta)
-        self.theta_button.grid(row=2, column=2, padx=(8, 0), pady=(8, 0))
+        self.theta_step_combo = ttk.Combobox(frame, textvariable=self.theta_var, values=ROTATION_STEP_VALUES, width=12, state='readonly')
+        self.theta_button_frame = ttk.Frame(frame)
+        self.theta_button_frame.grid(row=2, column=2, padx=(8, 0), pady=(8, 0))
+        self.theta_ccw_button = ttk.Button(self.theta_button_frame, text='↶', width=3, command=lambda: self._theta_step(-1))
+        self.theta_ccw_button.grid(row=0, column=0)
+        self.theta_button = ttk.Button(self.theta_button_frame, text='Rotate', command=self._theta)
+        self.theta_button.grid(row=0, column=1)
+        self.theta_cw_button = ttk.Button(self.theta_button_frame, text='↷', width=3, command=lambda: self._theta_step(1))
+        self.theta_cw_button.grid(row=0, column=2)
 
         row = ttk.Frame(frame)
         row.grid(row=3, column=0, columnspan=3, sticky='ew', pady=(10, 0))
@@ -433,11 +450,44 @@ class SMCGui(tk.Tk):
         Update motion labels to reflect absolute or relative movement mode.
         """
         if self.relative_var.get():
-            self.position_label.configure(text='Move by')
-            self.theta_label.configure(text='Rotate by deg')
+            self.position_label.configure(text='Step')
+            self.theta_label.configure(text='Step deg')
         else:
             self.position_label.configure(text='Position')
             self.theta_label.configure(text='Angle deg')
+        self._update_motion_button_layout()
+
+    def _update_motion_button_layout(self):
+        """
+        Show target buttons in absolute mode and direction buttons in relative mode.
+        """
+        if self.relative_var.get():
+            if self.position_var.get() not in LINEAR_STEP_VALUES:
+                self.position_var.set(LINEAR_STEP_VALUES[0])
+            if self.theta_var.get() not in ROTATION_STEP_VALUES:
+                self.theta_var.set(ROTATION_STEP_VALUES[0])
+
+            self.position_entry.grid_remove()
+            self.theta_entry.grid_remove()
+            self.position_step_combo.grid(row=1, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
+            self.theta_step_combo.grid(row=2, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
+            self.move_button.grid_remove()
+            self.theta_button.grid_remove()
+            self.move_down_button.grid()
+            self.move_up_button.grid()
+            self.theta_ccw_button.grid()
+            self.theta_cw_button.grid()
+        else:
+            self.position_step_combo.grid_remove()
+            self.theta_step_combo.grid_remove()
+            self.position_entry.grid(row=1, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
+            self.theta_entry.grid(row=2, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
+            self.move_down_button.grid_remove()
+            self.move_up_button.grid_remove()
+            self.theta_ccw_button.grid_remove()
+            self.theta_cw_button.grid_remove()
+            self.move_button.grid()
+            self.theta_button.grid()
 
     def _update_setting_values(self):
         """
@@ -466,11 +516,21 @@ class SMCGui(tk.Tk):
         axis_type = self._selected_axis_type()
         can_move = axis_type == 'l'
         can_rotate = axis_type == 'r'
+        position_state = 'normal' if can_move else 'disabled'
+        theta_state = 'normal' if can_rotate else 'disabled'
+        position_readonly_state = 'readonly' if can_move else 'disabled'
+        theta_readonly_state = 'readonly' if can_rotate else 'disabled'
 
-        self.position_entry.configure(state='normal' if can_move else 'disabled')
+        self.position_entry.configure(state=position_state)
+        self.position_step_combo.configure(state=position_readonly_state)
         self.move_button.configure(state='normal' if can_move else 'disabled')
-        self.theta_entry.configure(state='normal' if can_rotate else 'disabled')
+        self.move_down_button.configure(state='normal' if can_move else 'disabled')
+        self.move_up_button.configure(state='normal' if can_move else 'disabled')
+        self.theta_entry.configure(state=theta_state)
+        self.theta_step_combo.configure(state=theta_readonly_state)
         self.theta_button.configure(state='normal' if can_rotate else 'disabled')
+        self.theta_ccw_button.configure(state='normal' if can_rotate else 'disabled')
+        self.theta_cw_button.configure(state='normal' if can_rotate else 'disabled')
         self._update_motion_labels()
         self._update_motion_values_for_axis_change()
         self._update_setting_values()
@@ -495,6 +555,28 @@ class SMCGui(tk.Tk):
             change_message=lambda: self._change_message(axis, 'position', old_value, self.smc.positions.get(axis)),
         )
 
+    def _move_step(self, direction):
+        """
+        Move the selected linear axis by a signed relative step.
+
+        Args:
+            direction: ``1`` for the up direction and ``-1`` for the down direction.
+        """
+        axis = self.axis_var.get()
+        old_value = self.smc.positions.get(axis)
+        try:
+            step = abs(float(self.position_var.get())) * direction
+        except ValueError:
+            messagebox.showerror('Invalid step', 'Step must be a number.')
+            return
+
+        self._call_smc(
+            lambda: self.smc.move(axis, step),
+            'Move complete.',
+            update_values=True,
+            change_message=lambda: self._change_message(axis, 'position', old_value, self.smc.positions.get(axis)),
+        )
+
     def _theta(self):
         """
         Rotate the selected axis.
@@ -503,6 +585,28 @@ class SMCGui(tk.Tk):
         old_value = self.smc.positions.get(axis)
         self._call_smc(
             lambda: self.smc.theta(axis, self.theta_var.get()),
+            'Rotation complete.',
+            update_values=True,
+            change_message=lambda: self._change_message(axis, 'angle', old_value, self.smc.positions.get(axis)),
+        )
+
+    def _theta_step(self, direction):
+        """
+        Rotate the selected axis by a signed relative step.
+
+        Args:
+            direction: ``1`` for clockwise and ``-1`` for counterclockwise.
+        """
+        axis = self.axis_var.get()
+        old_value = self.smc.positions.get(axis)
+        try:
+            step = abs(float(self.theta_var.get())) * direction
+        except ValueError:
+            messagebox.showerror('Invalid step', 'Step must be a number.')
+            return
+
+        self._call_smc(
+            lambda: self.smc.theta(axis, step),
             'Rotation complete.',
             update_values=True,
             change_message=lambda: self._change_message(axis, 'angle', old_value, self.smc.positions.get(axis)),

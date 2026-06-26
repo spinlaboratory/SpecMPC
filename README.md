@@ -111,6 +111,10 @@ The GUI provides controls for:
 The selected axis controls are type-aware: linear axes enable the Move control,
 and rotational axes enable the Rotate control.
 
+In relative mode, the motion entry becomes a step-size dropdown. Linear axes
+allow 0.1, 0.5, or 1 mm steps. Rotational axes allow 0.1, 0.5, 1, 5, or 10
+degree steps.
+
 ## Python API
 
 First, make sure the product is properly installed and connected to the
