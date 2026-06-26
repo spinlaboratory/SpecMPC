@@ -85,6 +85,14 @@ You can pre-fill the connection settings from the command line:
 pySMC-gui -p COM3 -b 96000
 ```
 
+The GUI attempts to connect automatically when it opens. By default, the port
+selector uses `Auto`, which lets pySMC detect the controller. To open the GUI
+without connecting automatically:
+
+```console
+pySMC-gui --no-auto-connect
+```
+
 The GUI provides controls for:
 
 - Connecting and disconnecting from the controller.
@@ -102,6 +110,10 @@ The GUI provides controls for:
 
 The selected axis controls are type-aware: linear axes enable the Move control,
 and rotational axes enable the Rotate control.
+
+In relative mode, the motion entry becomes a step-size dropdown. Linear axes
+allow 0.1, 0.5, or 1 mm steps. Rotational axes allow 0.1, 0.5, 1, 5, or 10
+degree steps.
 
 ## Python API
 
