@@ -5,6 +5,24 @@
     "Y": "Y",
     "Z": "IRIS"
   },
+  "axis_limits": {
+    "E": {
+      "max": null,
+      "min": null
+    },
+    "X": {
+      "max": null,
+      "min": null
+    },
+    "Y": {
+      "max": null,
+      "min": null
+    },
+    "Z": {
+      "max": 8.0,
+      "min": 0.0
+    }
+  },
   "axis_types": {
     "E": "l",
     "X": "r",

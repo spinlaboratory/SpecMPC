@@ -107,17 +107,20 @@ The GUI provides controls for:
 - Selecting a motion axis directly from the top-level tabs.
 - Moving a linear axis.
 - Rotating a rotational axis.
+- Viewing a live vertical position rail or rotation dial for the selected axis.
 - Homing a selected linear axis.
 - Setting home position.
 - Reading current status.
 - Automatically switching between absolute text-entry moves and relative arrow-step moves.
-- Using the Advanced tab to choose an axis independently and edit display name, motion type, feedrate, homing sensitivity, motor current, and steps per unit.
+- Using the Advanced tab to choose an axis independently and edit display name, motion type, motion limits, feedrate, homing sensitivity, motor current, and steps per unit.
 - Saving, restoring, and resetting controller settings.
 - Sending raw G-code commands.
 
-Display names and motion types changed in the GUI are saved automatically and
-loaded the next time the GUI starts. The config is stored in the package
-directory at `pySMC/config/config.json`.
+Display names, motion types, and motion limits changed in the GUI are saved
+automatically and loaded the next time the GUI starts. The config is stored in
+the package directory at `pySMC/config/config.json`. IRIS defaults to a linear
+range of 0 to 8. The Advanced tab also has an Override motion limits checkbox
+for deliberate out-of-range moves on the selected axis only.
 
 The GUI checks the connected serial port periodically. If the controller is
 physically disconnected, the connection LED turns red and motion controls are
