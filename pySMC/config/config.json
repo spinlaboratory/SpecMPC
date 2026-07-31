@@ -4,5 +4,11 @@
     "X": "Goniometer",
     "Y": "Y",
     "Z": "IRIS"
+  },
+  "axis_types": {
+    "E": "l",
+    "X": "r",
+    "Y": "l",
+    "Z": "l"
   }
 }

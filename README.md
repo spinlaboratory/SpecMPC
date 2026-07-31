@@ -103,27 +103,35 @@ The GUI provides controls for:
 - Top tabs for IRIS, Goniometer, Y, E, Connection, Advanced, and Raw command.
 - A bottom log window for status and command output.
 - Connecting and disconnecting from the controller.
+- A connection LED: red for disconnected, green for connected, and orange while busy.
 - Selecting a motion axis directly from the top-level tabs.
 - Moving a linear axis.
 - Rotating a rotational axis.
 - Homing a selected linear axis.
 - Setting home position.
 - Reading current status.
-- Switching relative movement mode.
-- Using the Advanced tab to choose an axis independently and edit display name, feedrate, homing sensitivity, motor current, and steps per unit.
+- Automatically switching between absolute text-entry moves and relative arrow-step moves.
+- Using the Advanced tab to choose an axis independently and edit display name, motion type, feedrate, homing sensitivity, motor current, and steps per unit.
 - Saving, restoring, and resetting controller settings.
 - Sending raw G-code commands.
 
-Display names changed in the GUI are saved automatically and loaded the next
-time the GUI starts. The config is stored in the package directory at
-`pySMC/config/config.json`.
+Display names and motion types changed in the GUI are saved automatically and
+loaded the next time the GUI starts. The config is stored in the package
+directory at `pySMC/config/config.json`.
 
-The selected axis controls are type-aware: linear axes enable the Move control,
-and rotational axes enable the Rotate control.
+The GUI checks the connected serial port periodically. If the controller is
+physically disconnected, the connection LED turns red and motion controls are
+disabled.
 
-In relative mode, the motion entry becomes a step-size dropdown. Linear axes
-allow 0.1, 0.5, or 1 mm steps. Rotational axes allow 0.1, 0.5, 1, 5, or 10
-degree steps.
+The selected axis controls are type-aware: linear axes enable position arrows,
+and rotational axes enable angle arrows. Linear axis tabs show only position
+controls, and rotational axis tabs show only angle controls.
+
+The motion text box shows the current position or angle. Edit the value and
+press Enter to move in absolute mode. Use the arrow buttons to move by the
+selected step; arrow moves automatically switch the controller to relative
+mode. Linear axes allow 0.1, 0.5, or 1 mm steps. Rotational axes allow 0.1,
+0.5, 1, 5, or 10 degree steps.
 
 ## Python API
 

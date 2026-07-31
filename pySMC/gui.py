@@ -5,6 +5,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, scrolledtext, ttk
 
+import serial
 import serial.tools.list_ports
 
 from .pySMC import DEFAULT_AXIS_ALIASES, SMC
@@ -18,39 +19,78 @@ AUTO_PORT_LABEL = 'Auto'
 LINEAR_STEP_VALUES = ('0.1', '0.5', '1')
 ROTATION_STEP_VALUES = ('0.1', '0.5', '1', '5', '10')
 DEFAULT_AXIS_ORDER = ('Z', 'X', 'Y', 'E')
+CONTROLLER_AXIS_ORDER = ('X', 'Y', 'Z', 'E')
+DEFAULT_AXIS_TYPES = {'X': 'r', 'Y': 'l', 'Z': 'l', 'E': 'l'}
 CONFIG_DIR = Path(__file__).resolve().parent / 'config'
 CONFIG_PATH = CONFIG_DIR / 'config.json'
+HEALTH_CHECK_INTERVAL_MS = 1000
+AXIS_TYPE_LABELS = {'l': 'Linear', 'r': 'Rotation'}
+AXIS_TYPE_VALUES = {label: axis_type for axis_type, label in AXIS_TYPE_LABELS.items()}
 
 
-def _load_saved_axis_aliases():
+def _load_config():
     """
-    Load saved GUI axis aliases from the user config file.
+    Load GUI settings from the package config file.
 
     Returns:
-        Saved aliases keyed by controller axis, or an empty dictionary when no
-        valid config file exists.
+        A settings dictionary. Missing or invalid config files return an empty
+        dictionary.
     """
     try:
         with CONFIG_PATH.open('r', encoding='utf-8') as config_file:
             config = json.load(config_file)
     except (OSError, json.JSONDecodeError):
         return {}
+    return config if isinstance(config, dict) else {}
 
+
+def _load_saved_axis_aliases():
+    """
+    Load saved GUI axis aliases from the package config file.
+
+    Returns:
+        Saved aliases keyed by controller axis, or an empty dictionary when no
+        valid config file exists.
+    """
+    config = _load_config()
     aliases = config.get('axis_aliases', {})
     if not isinstance(aliases, dict):
         return {}
     return {str(axis).upper(): str(alias) for axis, alias in aliases.items()}
 
 
-def _save_axis_aliases(axis_aliases):
+def _load_saved_axis_types():
     """
-    Save GUI axis aliases to the user config file.
+    Load saved GUI axis motion types from the package config file.
+
+    Returns:
+        Saved axis types keyed by controller axis. Only ``"l"`` and ``"r"``
+        values are accepted.
+    """
+    config = _load_config()
+    axis_types = config.get('axis_types', {})
+    if not isinstance(axis_types, dict):
+        return {}
+    return {
+        str(axis).upper(): str(axis_type).lower()
+        for axis, axis_type in axis_types.items()
+        if str(axis_type).lower() in AXIS_TYPE_LABELS
+    }
+
+
+def _save_config(axis_aliases, axis_types):
+    """
+    Save GUI axis settings to the package config file.
 
     Args:
         axis_aliases: Mapping of controller axis to display alias.
+        axis_types: Mapping of controller axis to motion type.
     """
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    config = {'axis_aliases': axis_aliases}
+    config = {
+        'axis_aliases': axis_aliases,
+        'axis_types': axis_types,
+    }
     with CONFIG_PATH.open('w', encoding='utf-8') as config_file:
         json.dump(config, config_file, indent=2, sort_keys=True)
         config_file.write('\n')
@@ -78,13 +118,16 @@ class SMCGui(tk.Tk):
         """
         super().__init__()
         self.title('pySMC Control Panel')
-        self.geometry('560x460')
-        self.minsize(520, 380)
+        self.geometry('560x560')
+        self.minsize(520, 480)
 
         self.smc = None
         self.busy = False
+        self.health_check_job = None
         self.axis_aliases = dict(DEFAULT_AXIS_ALIASES)
         self.axis_aliases.update(_load_saved_axis_aliases())
+        self.axis_types = dict(DEFAULT_AXIS_TYPES)
+        self.axis_types.update(_load_saved_axis_types())
         if axis_aliases:
             self.axis_aliases.update(axis_aliases)
         self.axis_label_to_axis = {}
@@ -104,11 +147,14 @@ class SMCGui(tk.Tk):
         self.advanced_axis_var = tk.StringVar(value=self._axis_label('Z'))
         self.position_var = tk.StringVar(value='0')
         self.theta_var = tk.StringVar(value='0')
+        self.position_step_var = tk.StringVar(value=LINEAR_STEP_VALUES[0])
+        self.theta_step_var = tk.StringVar(value=ROTATION_STEP_VALUES[0])
         self.feedrate_var = tk.StringVar(value='5')
         self.homing_sensitivity_var = tk.StringVar(value='0')
         self.current_var = tk.StringVar(value='800')
         self.steps_var = tk.StringVar(value='400')
         self.axis_alias_var = tk.StringVar(value='')
+        self.axis_type_var = tk.StringVar(value=AXIS_TYPE_LABELS[self.axis_types.get('Z', 'l')])
         self.raw_command_var = tk.StringVar(value='M114')
         self.raw_recv_var = tk.BooleanVar(value=True)
 
@@ -210,31 +256,35 @@ class SMCGui(tk.Tk):
 
         self.position_label = ttk.Label(frame, text='Position')
         self.position_label.grid(row=0, column=0, sticky='w', pady=(0, 0))
-        self.position_entry = ttk.Entry(frame, textvariable=self.position_var, width=12)
-        self.position_entry.grid(row=0, column=1, sticky='ew', padx=(8, 0), pady=(0, 0))
-        self.position_step_combo = ttk.Combobox(frame, textvariable=self.position_var, values=LINEAR_STEP_VALUES, width=12, state='readonly')
-        self.move_button_frame = ttk.Frame(frame)
-        self.move_button_frame.grid(row=0, column=2, padx=(8, 0), pady=(0, 0))
-        self.move_down_button = ttk.Button(self.move_button_frame, text='↓', width=3, command=lambda: self._move_step(-1))
+        self.position_spin_frame = ttk.Frame(frame)
+        self.position_spin_frame.grid(row=0, column=1, sticky='ew', padx=(8, 0), pady=(0, 0))
+        self.position_spin_frame.columnconfigure(1, weight=1)
+        self.move_down_button = ttk.Button(self.position_spin_frame, text='↓', width=3, command=lambda: self._move_step(-1))
         self.move_down_button.grid(row=0, column=0)
-        self.move_button = ttk.Button(self.move_button_frame, text='Move', command=self._move)
-        self.move_button.grid(row=0, column=1)
-        self.move_up_button = ttk.Button(self.move_button_frame, text='↑', width=3, command=lambda: self._move_step(1))
+        self.position_entry = ttk.Entry(self.position_spin_frame, textvariable=self.position_var, width=12)
+        self.position_entry.grid(row=0, column=1, sticky='ew', padx=4)
+        self.position_entry.bind('<Return>', lambda event: self._move())
+        self.position_entry.bind('<KeyRelease>', lambda event: self._prepare_absolute_mode())
+        self.move_up_button = ttk.Button(self.position_spin_frame, text='↑', width=3, command=lambda: self._move_step(1))
         self.move_up_button.grid(row=0, column=2)
+        self.position_step_combo = ttk.Combobox(frame, textvariable=self.position_step_var, values=LINEAR_STEP_VALUES, width=7, state='readonly')
+        self.position_step_combo.grid(row=0, column=2, sticky='ew', padx=(8, 0), pady=(0, 0))
 
         self.theta_label = ttk.Label(frame, text='Angle deg')
         self.theta_label.grid(row=1, column=0, sticky='w', pady=(8, 0))
-        self.theta_entry = ttk.Entry(frame, textvariable=self.theta_var, width=12)
-        self.theta_entry.grid(row=1, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
-        self.theta_step_combo = ttk.Combobox(frame, textvariable=self.theta_var, values=ROTATION_STEP_VALUES, width=12, state='readonly')
-        self.theta_button_frame = ttk.Frame(frame)
-        self.theta_button_frame.grid(row=1, column=2, padx=(8, 0), pady=(8, 0))
-        self.theta_ccw_button = ttk.Button(self.theta_button_frame, text='↶', width=3, command=lambda: self._theta_step(-1))
+        self.theta_spin_frame = ttk.Frame(frame)
+        self.theta_spin_frame.grid(row=1, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
+        self.theta_spin_frame.columnconfigure(1, weight=1)
+        self.theta_ccw_button = ttk.Button(self.theta_spin_frame, text='↶', width=3, command=lambda: self._theta_step(-1))
         self.theta_ccw_button.grid(row=0, column=0)
-        self.theta_button = ttk.Button(self.theta_button_frame, text='Rotate', command=self._theta)
-        self.theta_button.grid(row=0, column=1)
-        self.theta_cw_button = ttk.Button(self.theta_button_frame, text='↷', width=3, command=lambda: self._theta_step(1))
+        self.theta_entry = ttk.Entry(self.theta_spin_frame, textvariable=self.theta_var, width=12)
+        self.theta_entry.grid(row=0, column=1, sticky='ew', padx=4)
+        self.theta_entry.bind('<Return>', lambda event: self._theta())
+        self.theta_entry.bind('<KeyRelease>', lambda event: self._prepare_absolute_mode())
+        self.theta_cw_button = ttk.Button(self.theta_spin_frame, text='↷', width=3, command=lambda: self._theta_step(1))
         self.theta_cw_button.grid(row=0, column=2)
+        self.theta_step_combo = ttk.Combobox(frame, textvariable=self.theta_step_var, values=ROTATION_STEP_VALUES, width=7, state='readonly')
+        self.theta_step_combo.grid(row=1, column=2, sticky='ew', padx=(8, 0), pady=(8, 0))
 
         row = ttk.Frame(frame)
         row.grid(row=2, column=0, columnspan=3, sticky='ew', pady=(10, 0))
@@ -246,32 +296,28 @@ class SMCGui(tk.Tk):
         self.current_status_button = ttk.Button(row, text='Current Status', command=self._refresh_status)
         self.current_status_button.grid(row=0, column=2, sticky='ew', padx=(4, 0))
 
-        self.relative_check = ttk.Checkbutton(frame, text='Relative mode', variable=self.relative_var, command=self._set_relative)
-        self.relative_check.grid(row=3, column=0, columnspan=3, sticky='w', pady=(10, 0))
-
         widgets = {
             'axis_frame': frame,
             'position_label': self.position_label,
+            'position_spin_frame': self.position_spin_frame,
             'position_entry': self.position_entry,
             'position_step_combo': self.position_step_combo,
-            'move_button_frame': self.move_button_frame,
             'move_down_button': self.move_down_button,
-            'move_button': self.move_button,
             'move_up_button': self.move_up_button,
             'theta_label': self.theta_label,
+            'theta_spin_frame': self.theta_spin_frame,
             'theta_entry': self.theta_entry,
             'theta_step_combo': self.theta_step_combo,
-            'theta_button_frame': self.theta_button_frame,
             'theta_ccw_button': self.theta_ccw_button,
-            'theta_button': self.theta_button,
             'theta_cw_button': self.theta_cw_button,
             'home_axis_button': self.home_axis_button,
             'set_home_button': self.set_home_button,
             'current_status_button': self.current_status_button,
-            'relative_check': self.relative_check,
+            'action_row': row,
         }
         if axis:
             self.axis_page_widgets[axis] = widgets
+            self._set_axis_page_motion_visibility(axis)
             if axis == self._selected_motion_axis():
                 self._use_axis_page_widgets(axis)
 
@@ -297,19 +343,24 @@ class SMCGui(tk.Tk):
         ttk.Entry(frame, textvariable=self.axis_alias_var, width=14).grid(row=1, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
         ttk.Button(frame, text='Set', command=self._set_axis_alias).grid(row=1, column=2, padx=(8, 0), pady=(8, 0))
 
+        ttk.Label(frame, text='Motion type').grid(row=2, column=0, sticky='w', pady=(8, 0))
+        self.axis_type_combo = ttk.Combobox(frame, textvariable=self.axis_type_var, values=tuple(AXIS_TYPE_VALUES), width=14, state='readonly')
+        self.axis_type_combo.grid(row=2, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
+        ttk.Button(frame, text='Set', command=self._set_axis_type).grid(row=2, column=2, padx=(8, 0), pady=(8, 0))
+
         rows = (
             ('Feedrate unit/s', self.feedrate_var, self._set_feedrate),
             ('Homing sensitivity', self.homing_sensitivity_var, self._set_homing_sensitivity),
             ('Current mA', self.current_var, self._set_current),
             ('Steps/unit', self.steps_var, self._set_steps),
         )
-        for index, (label, variable, command) in enumerate(rows, start=2):
+        for index, (label, variable, command) in enumerate(rows, start=3):
             ttk.Label(frame, text=label).grid(row=index, column=0, sticky='w', pady=(8, 0))
             ttk.Entry(frame, textvariable=variable, width=14).grid(row=index, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
             ttk.Button(frame, text='Set', command=command).grid(row=index, column=2, padx=(8, 0), pady=(8, 0))
 
         buttons = ttk.Frame(frame)
-        buttons.grid(row=6, column=0, columnspan=3, sticky='ew', pady=(12, 0))
+        buttons.grid(row=7, column=0, columnspan=3, sticky='ew', pady=(12, 0))
         buttons.columnconfigure((0, 1, 2), weight=1)
         ttk.Button(buttons, text='Save', command=self._save).grid(row=0, column=0, sticky='ew', padx=(0, 4))
         ttk.Button(buttons, text='Restore', command=self._restore).grid(row=0, column=1, sticky='ew', padx=4)
@@ -346,12 +397,16 @@ class SMCGui(tk.Tk):
         top.columnconfigure(0, weight=1)
 
         ttk.Label(top, text='Status and Log').grid(row=0, column=0, sticky='w')
+        self.connection_led = tk.Canvas(top, width=16, height=16, highlightthickness=0)
+        self.connection_led.grid(row=0, column=1, sticky='e', padx=(0, 6))
+        self.connection_led_oval = self.connection_led.create_oval(2, 2, 14, 14, fill='red', outline='red')
+        ttk.Label(top, textvariable=self.connection_var).grid(row=0, column=2, sticky='e', padx=(0, 12))
         self.refresh_status_button = ttk.Button(top, text='Refresh Status', command=self._refresh_status)
-        self.refresh_status_button.grid(row=0, column=1, sticky='e', padx=(0, 8))
+        self.refresh_status_button.grid(row=0, column=3, sticky='e', padx=(0, 8))
         self.clear_log_button = ttk.Button(top, text='Clear', command=self._clear_log)
-        self.clear_log_button.grid(row=0, column=2, sticky='e')
+        self.clear_log_button.grid(row=0, column=4, sticky='e')
 
-        self.log = scrolledtext.ScrolledText(parent, height=8, wrap='word', state='disabled')
+        self.log = scrolledtext.ScrolledText(parent, height=16, wrap='word', state='disabled')
         self.log.grid(row=1, column=0, sticky='nsew')
 
     def _refresh_ports(self):
@@ -384,15 +439,27 @@ class SMCGui(tk.Tk):
             return
 
         def task():
-            return SMC(port=port, baud_rate=baud_rate, write_timeout=write_timeout, timeout=timeout, axis_aliases=self.axis_aliases)
+            axis_types = [self.axis_types.get(axis, DEFAULT_AXIS_TYPES.get(axis, 'l')) for axis in CONTROLLER_AXIS_ORDER]
+            return SMC(
+                port=port,
+                baud_rate=baud_rate,
+                write_timeout=write_timeout,
+                timeout=timeout,
+                axis=list(CONTROLLER_AXIS_ORDER),
+                axis_types=axis_types,
+                axis_aliases=self.axis_aliases,
+            )
 
         def done(smc):
             self.smc = smc
             self.axis_aliases = dict(self.smc.axis_aliases)
+            self.axis_types = dict(zip(self.smc.axis, self.smc.types))
             self._load_axis_configuration()
             self.relative_var.set(self.smc.relative())
             self.connection_var.set('Connected')
+            self._set_connection_indicator('connected')
             self._set_controls_enabled(True)
+            self._start_connection_health_check()
             self._update_value_fields()
             self._update_axis_controls()
             self._log('Connected to SMC.')
@@ -404,12 +471,88 @@ class SMCGui(tk.Tk):
         """
         Close the current serial connection.
         """
+        self._stop_connection_health_check()
         if self.smc and getattr(self.smc, 'ser', None) and self.smc.ser.is_open:
             self.smc.ser.close()
         self.smc = None
         self.connection_var.set('Disconnected')
+        self._set_connection_indicator('disconnected')
         self._set_controls_enabled(False)
         self._log('Disconnected.')
+
+    def _start_connection_health_check(self):
+        """
+        Start periodic checks that the connected serial port still exists.
+        """
+        self._stop_connection_health_check()
+        self.health_check_job = self.after(HEALTH_CHECK_INTERVAL_MS, self._check_connection_health)
+
+    def _stop_connection_health_check(self):
+        """
+        Stop the periodic connection health check.
+        """
+        if self.health_check_job is None:
+            return
+        try:
+            self.after_cancel(self.health_check_job)
+        except tk.TclError:
+            pass
+        self.health_check_job = None
+
+    def _connected_port_name(self):
+        """
+        Return the current serial port name, if known.
+        """
+        if not self.smc or not getattr(self.smc, 'ser', None):
+            return None
+        return getattr(self.smc.ser, 'port', None) or getattr(self.smc.ser, 'name', None)
+
+    def _connected_port_available(self):
+        """
+        Return whether the connected serial port is still listed by the OS.
+        """
+        port_name = self._connected_port_name()
+        if not port_name:
+            return True
+        available_ports = {port.device for port in serial.tools.list_ports.comports()}
+        return port_name in available_ports
+
+    def _check_connection_health(self):
+        """
+        Mark the controller disconnected if the serial port disappears.
+        """
+        self.health_check_job = None
+        if not self.smc:
+            return
+
+        ser = getattr(self.smc, 'ser', None)
+        if not ser or not ser.is_open:
+            self._connection_lost('Stepper Motor Controller serial port is closed.')
+            return
+
+        port_name = self._connected_port_name()
+        if not self._connected_port_available():
+            self._connection_lost(f'Stepper Motor Controller disconnected from {port_name}.')
+            return
+
+        self._start_connection_health_check()
+
+    def _connection_lost(self, message):
+        """
+        Update the GUI after an unexpected controller disconnection.
+        """
+        self._stop_connection_health_check()
+        if self.smc and getattr(self.smc, 'ser', None):
+            try:
+                if self.smc.ser.is_open:
+                    self.smc.ser.close()
+            except (OSError, serial.SerialException):
+                pass
+        self.smc = None
+        self.connection_var.set('Disconnected')
+        self._set_connection_indicator('disconnected')
+        self._set_controls_enabled(False)
+        self._log(message)
 
     def _axis_labels(self, axes):
         """
@@ -476,6 +619,65 @@ class SMCGui(tk.Tk):
         for name, widget in widgets.items():
             setattr(self, name, widget)
 
+    def _axis_type(self, axis):
+        """
+        Return the configured type for one controller axis.
+        """
+        if self.smc and axis in self.smc.axis:
+            return self.smc.types[self.smc.axis.index(axis)]
+        return self.axis_types.get(axis, DEFAULT_AXIS_TYPES.get(axis))
+
+    def _save_axis_settings(self):
+        """
+        Persist axis aliases and motion types to the package config file.
+        """
+        _save_config(self.axis_aliases, self.axis_types)
+
+    def _set_connection_indicator(self, status):
+        """
+        Update the connection LED color.
+        """
+        colors = {
+            'connected': 'green',
+            'disconnected': 'red',
+            'busy': 'orange',
+        }
+        color = colors.get(status, 'red')
+        if hasattr(self, 'connection_led'):
+            self.connection_led.itemconfigure(self.connection_led_oval, fill=color, outline=color)
+
+    def _set_axis_page_motion_visibility(self, axis):
+        """
+        Show only the motion controls that apply to one axis page.
+        """
+        widgets = self.axis_page_widgets.get(axis)
+        if not widgets:
+            return
+
+        axis_type = self._axis_type(axis)
+        is_linear = axis_type == 'l'
+        is_rotational = axis_type == 'r'
+
+        if is_linear:
+            widgets['position_label'].grid(row=0, column=0, sticky='w', pady=(0, 0))
+            widgets['position_spin_frame'].grid(row=0, column=1, sticky='ew', padx=(8, 0), pady=(0, 0))
+            widgets['position_step_combo'].grid(row=0, column=2, sticky='ew', padx=(8, 0), pady=(0, 0))
+        else:
+            widgets['position_label'].grid_remove()
+            widgets['position_spin_frame'].grid_remove()
+            widgets['position_step_combo'].grid_remove()
+
+        if is_rotational:
+            widgets['theta_label'].grid(row=0, column=0, sticky='w', pady=(0, 0))
+            widgets['theta_spin_frame'].grid(row=0, column=1, sticky='ew', padx=(8, 0), pady=(0, 0))
+            widgets['theta_step_combo'].grid(row=0, column=2, sticky='ew', padx=(8, 0), pady=(0, 0))
+        else:
+            widgets['theta_label'].grid_remove()
+            widgets['theta_spin_frame'].grid_remove()
+            widgets['theta_step_combo'].grid_remove()
+
+        widgets['action_row'].grid(row=1, column=0, columnspan=3, sticky='ew', pady=(10, 0))
+
     def _update_all_motion_button_layouts(self):
         """
         Apply the current relative/absolute layout to every axis page.
@@ -483,6 +685,7 @@ class SMCGui(tk.Tk):
         selected_axis = self._selected_motion_axis()
         for axis in self.axis_page_widgets:
             self._use_axis_page_widgets(axis)
+            self._set_axis_page_motion_visibility(axis)
             self._update_motion_labels()
         self._use_axis_page_widgets(selected_axis)
 
@@ -531,7 +734,7 @@ class SMCGui(tk.Tk):
         axis = self._selected_motion_axis()
         if axis not in self.smc.axis:
             return None
-        return self.smc.types[self.smc.axis.index(axis)]
+        return self._axis_type(axis)
 
     def _format_value(self, value):
         """
@@ -565,8 +768,6 @@ class SMCGui(tk.Tk):
             return
 
         self._update_motion_labels()
-        if self.relative_var.get():
-            return
 
         axis = self._selected_motion_axis()
         if axis not in self.smc.axis or axis not in self.smc.positions:
@@ -594,58 +795,24 @@ class SMCGui(tk.Tk):
             return
 
         self._update_motion_labels()
-        axis_type = self._selected_axis_type()
-
-        if not self.relative_var.get():
-            self._update_motion_values()
-        elif axis_type == 'l':
-            self.theta_var.set('')
-        elif axis_type == 'r':
-            self.position_var.set('')
+        self._update_motion_values()
 
     def _update_motion_labels(self):
         """
-        Update motion labels to reflect absolute or relative movement mode.
+        Keep motion labels stable for editable absolute targets.
         """
-        if self.relative_var.get():
-            self.position_label.configure(text='Step')
-            self.theta_label.configure(text='Step deg')
-        else:
-            self.position_label.configure(text='Position')
-            self.theta_label.configure(text='Angle deg')
+        self.position_label.configure(text='Position')
+        self.theta_label.configure(text='Angle deg')
         self._update_motion_button_layout()
 
     def _update_motion_button_layout(self):
         """
-        Show target buttons in absolute mode and direction buttons in relative mode.
+        Keep step dropdown values valid for the current motion controls.
         """
-        if self.relative_var.get():
-            if self.position_var.get() not in LINEAR_STEP_VALUES:
-                self.position_var.set(LINEAR_STEP_VALUES[0])
-            if self.theta_var.get() not in ROTATION_STEP_VALUES:
-                self.theta_var.set(ROTATION_STEP_VALUES[0])
-
-            self.position_entry.grid_remove()
-            self.theta_entry.grid_remove()
-            self.position_step_combo.grid(row=0, column=1, sticky='ew', padx=(8, 0), pady=(0, 0))
-            self.theta_step_combo.grid(row=1, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
-            self.move_button.grid_remove()
-            self.theta_button.grid_remove()
-            self.move_down_button.grid()
-            self.move_up_button.grid()
-            self.theta_ccw_button.grid()
-            self.theta_cw_button.grid()
-        else:
-            self.position_step_combo.grid_remove()
-            self.theta_step_combo.grid_remove()
-            self.position_entry.grid(row=0, column=1, sticky='ew', padx=(8, 0), pady=(0, 0))
-            self.theta_entry.grid(row=1, column=1, sticky='ew', padx=(8, 0), pady=(8, 0))
-            self.move_down_button.grid_remove()
-            self.move_up_button.grid_remove()
-            self.theta_ccw_button.grid_remove()
-            self.theta_cw_button.grid_remove()
-            self.move_button.grid()
-            self.theta_button.grid()
+        if self.position_step_var.get() not in LINEAR_STEP_VALUES:
+            self.position_step_var.set(LINEAR_STEP_VALUES[0])
+        if self.theta_step_var.get() not in ROTATION_STEP_VALUES:
+            self.theta_step_var.set(ROTATION_STEP_VALUES[0])
 
     def _update_setting_values(self):
         """
@@ -656,6 +823,7 @@ class SMCGui(tk.Tk):
 
         axis = self._selected_settings_axis()
         self.axis_alias_var.set(self._axis_label(axis))
+        self.axis_type_var.set(AXIS_TYPE_LABELS.get(self._axis_type(axis), 'Linear'))
         if axis in self.smc.feedrates:
             self.feedrate_var.set(self._format_value(self.smc.feedrates[axis]))
         if axis in self.smc.homing_sensitivities:
@@ -682,12 +850,10 @@ class SMCGui(tk.Tk):
 
         self.position_entry.configure(state=position_state)
         self.position_step_combo.configure(state=position_readonly_state)
-        self.move_button.configure(state='normal' if can_move else 'disabled')
         self.move_down_button.configure(state='normal' if can_move else 'disabled')
         self.move_up_button.configure(state='normal' if can_move else 'disabled')
         self.theta_entry.configure(state=theta_state)
         self.theta_step_combo.configure(state=theta_readonly_state)
-        self.theta_button.configure(state='normal' if can_rotate else 'disabled')
         self.theta_ccw_button.configure(state='normal' if can_rotate else 'disabled')
         self.theta_cw_button.configure(state='normal' if can_rotate else 'disabled')
         self.home_axis_button.configure(state='normal' if can_move else 'disabled')
@@ -716,14 +882,32 @@ class SMCGui(tk.Tk):
                 self._on_axis_changed()
                 break
 
+    def _prepare_absolute_mode(self):
+        """
+        Show that typed targets will run in absolute mode.
+        """
+        if self.relative_var.get():
+            self.relative_var.set(False)
+            self._update_all_motion_button_layouts()
+
+    def _prepare_relative_mode(self):
+        """
+        Show that arrow buttons will run in relative mode.
+        """
+        if not self.relative_var.get():
+            self.relative_var.set(True)
+            self._update_all_motion_button_layouts()
+
     def _move(self):
         """
         Move the selected axis linearly.
         """
+        self.relative_var.set(False)
+        self._update_all_motion_button_layouts()
         axis = self._selected_motion_axis()
         old_value = self.smc.positions.get(axis)
         self._call_smc(
-            lambda: self.smc.move(axis, self.position_var.get()),
+            lambda: (self.smc.relative(False), self.smc.move(axis, self.position_var.get()))[-1],
             'Move complete.',
             update_values=True,
             change_message=lambda: self._change_message(axis, 'position', old_value, self.smc.positions.get(axis)),
@@ -736,16 +920,17 @@ class SMCGui(tk.Tk):
         Args:
             direction: ``1`` for the up direction and ``-1`` for the down direction.
         """
+        self._prepare_relative_mode()
         axis = self._selected_motion_axis()
         old_value = self.smc.positions.get(axis)
         try:
-            step = abs(float(self.position_var.get())) * direction
+            step = abs(float(self.position_step_var.get())) * direction
         except ValueError:
             messagebox.showerror('Invalid step', 'Step must be a number.')
             return
 
         self._call_smc(
-            lambda: self.smc.move(axis, step),
+            lambda: (self.smc.relative(True), self.smc.move(axis, step))[-1],
             'Move complete.',
             update_values=True,
             change_message=lambda: self._change_message(axis, 'position', old_value, self.smc.positions.get(axis)),
@@ -755,10 +940,12 @@ class SMCGui(tk.Tk):
         """
         Rotate the selected axis.
         """
+        self.relative_var.set(False)
+        self._update_all_motion_button_layouts()
         axis = self._selected_motion_axis()
         old_value = self.smc.positions.get(axis)
         self._call_smc(
-            lambda: self.smc.theta(axis, self.theta_var.get()),
+            lambda: (self.smc.relative(False), self.smc.theta(axis, self.theta_var.get()))[-1],
             'Rotation complete.',
             update_values=True,
             change_message=lambda: self._change_message(axis, 'angle', old_value, self.smc.positions.get(axis)),
@@ -771,16 +958,17 @@ class SMCGui(tk.Tk):
         Args:
             direction: ``1`` for clockwise and ``-1`` for counterclockwise.
         """
+        self._prepare_relative_mode()
         axis = self._selected_motion_axis()
         old_value = self.smc.positions.get(axis)
         try:
-            step = abs(float(self.theta_var.get())) * direction
+            step = abs(float(self.theta_step_var.get())) * direction
         except ValueError:
             messagebox.showerror('Invalid step', 'Step must be a number.')
             return
 
         self._call_smc(
-            lambda: self.smc.theta(axis, step),
+            lambda: (self.smc.relative(True), self.smc.theta(axis, step))[-1],
             'Rotation complete.',
             update_values=True,
             change_message=lambda: self._change_message(axis, 'angle', old_value, self.smc.positions.get(axis)),
@@ -812,21 +1000,6 @@ class SMCGui(tk.Tk):
             change_message=lambda: self._change_message(axis, 'position', old_value, self.smc.positions.get(axis)),
         )
 
-    def _set_relative(self):
-        """
-        Apply the relative movement checkbox state to the controller.
-        """
-        old_value = self.smc.relative()
-        self._update_all_motion_button_layouts()
-        self._call_smc(
-            lambda: self.smc.relative(self.relative_var.get()),
-            'Movement mode updated.',
-            refresh_status=False,
-            false_is_error=False,
-            update_values=True,
-            change_message=lambda: self._change_message('', 'relative mode', old_value, self.smc.relative()),
-        )
-
     def _set_axis_alias(self):
         """
         Update the display-only alias for the selected settings axis.
@@ -848,7 +1021,7 @@ class SMCGui(tk.Tk):
 
         self.axis_aliases = dict(self.smc.axis_aliases)
         try:
-            _save_axis_aliases(self.axis_aliases)
+            self._save_axis_settings()
         except OSError as error:
             messagebox.showerror('Alias not saved', f'Display name changed for this session, but could not save it:\n{error}')
             self._log(f'Alias save failed: {error}')
@@ -856,6 +1029,33 @@ class SMCGui(tk.Tk):
         self.axis_alias_var.set(self._axis_label(axis))
         self._update_axis_controls()
         self._log(f'{axis} display name: {old_label} -> {self._axis_label(axis)}')
+
+    def _set_axis_type(self):
+        """
+        Update the selected axis motion type and save it to config.
+        """
+        axis = self._selected_settings_axis()
+        axis_type = AXIS_TYPE_VALUES.get(self.axis_type_var.get())
+        if axis_type not in AXIS_TYPE_LABELS:
+            messagebox.showerror('Invalid motion type', 'Choose Linear or Rotation.')
+            return
+
+        old_type = AXIS_TYPE_LABELS.get(self._axis_type(axis), self._axis_type(axis))
+        self.axis_types[axis] = axis_type
+        if self.smc and axis in self.smc.axis:
+            self.smc.types[self.smc.axis.index(axis)] = axis_type
+
+        try:
+            self._save_axis_settings()
+        except OSError as error:
+            messagebox.showerror('Axis type not saved', f'Motion type changed for this session, but could not save it:\n{error}')
+            self._log(f'Axis type save failed: {error}')
+
+        for page_axis in self.axis_page_widgets:
+            self._set_axis_page_motion_visibility(page_axis)
+        self._update_all_motion_button_layouts()
+        self._update_axis_controls()
+        self._log(f'{self._axis_label(axis)} motion type: {old_type} -> {AXIS_TYPE_LABELS[axis_type]}')
 
     def _set_feedrate(self):
         """
@@ -1036,6 +1236,8 @@ class SMCGui(tk.Tk):
         self.busy = False
         self._set_busy(False)
         self._log(f'{type(error).__name__}: {error}')
+        if isinstance(error, (OSError, serial.SerialException)) or not self._connected_port_available():
+            self._connection_lost('Stepper Motor Controller connection was lost.')
         messagebox.showerror(title, str(error))
 
     def _set_busy(self, busy):
@@ -1047,15 +1249,18 @@ class SMCGui(tk.Tk):
         """
         if busy:
             self.connection_var.set('Busy')
+            self._set_connection_indicator('busy')
             self.connect_button.configure(state='disabled')
             self.disconnect_button.configure(state='disabled')
             self._set_controls_enabled(False)
         elif self.smc:
             self.connection_var.set('Connected')
+            self._set_connection_indicator('connected')
             self.connect_button.configure(state='normal')
             self._set_controls_enabled(True)
         else:
             self.connection_var.set('Disconnected')
+            self._set_connection_indicator('disconnected')
             self.connect_button.configure(state='normal')
             self._set_controls_enabled(False)
 
