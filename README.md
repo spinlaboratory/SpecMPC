@@ -58,10 +58,11 @@ followed by arguments:
 
 ```text
 pySMC> status
-pySMC> move Z 0.8
-pySMC> theta X 15
-pySMC> feedrate Z 5
-pySMC> homing_sensitivity Z 120
+pySMC> move IRIS 0.8
+pySMC> theta Goniometer 15
+pySMC> feedrate IRIS 5
+pySMC> set_axis_alias Z Probe
+pySMC> homing_sensitivity IRIS 120
 pySMC> relative true
 pySMC> send_command M114 true
 pySMC> help
@@ -70,6 +71,10 @@ pySMC> exit
 
 Argument values such as numbers, `true`, `false`, and `none` are converted to
 Python values automatically.
+
+Axis aliases are display names only. By default, `Z` is shown as `IRIS` and
+`X` is shown as `Goniometer`; commands sent to the controller still use the
+underlying `X`, `Y`, `Z`, or `E` axis letters.
 
 ## Graphical Control Panel
 
@@ -95,25 +100,42 @@ pySMC-gui --no-auto-connect
 
 The GUI provides controls for:
 
+- Top tabs for IRIS, Goniometer, Y, E, Connection, Advanced, and Raw command.
+- A bottom log window for status and command output.
 - Connecting and disconnecting from the controller.
-- Selecting one axis and controlling its motion/settings from a single Axis Control panel.
+- A connection LED: red for disconnected, green for connected, and orange while busy.
+- Selecting a motion axis directly from the top-level tabs.
 - Moving a linear axis.
 - Rotating a rotational axis.
-- Homing one axis or all axes.
+- Viewing a live vertical position rail or rotation dial for the selected axis.
+- Homing a selected linear axis.
 - Setting home position.
 - Reading current status.
-- Switching relative movement mode.
-- Opening Advanced Settings to choose an axis independently and edit feedrate, homing sensitivity, motor current, and steps per unit.
+- Automatically switching between absolute text-entry moves and relative arrow-step moves.
+- Using the Advanced tab to choose an axis independently and edit display name, motion type, motion limits, feedrate, homing sensitivity, motor current, and steps per unit.
 - Saving, restoring, and resetting controller settings.
 - Sending raw G-code commands.
-- Viewing status and command output.
 
-The selected axis controls are type-aware: linear axes enable the Move control,
-and rotational axes enable the Rotate control.
+Display names, motion types, and motion limits changed in the GUI are saved
+automatically and loaded the next time the GUI starts. Repository defaults are
+stored in `pySMC/config/default_config.json`; local GUI changes are saved to
+`pySMC/config/config.json`, which is ignored by git. IRIS defaults to a linear
+range of 0 to 8. The Advanced tab also has an Override motion limits checkbox
+for deliberate out-of-range moves on the selected axis only.
 
-In relative mode, the motion entry becomes a step-size dropdown. Linear axes
-allow 0.1, 0.5, or 1 mm steps. Rotational axes allow 0.1, 0.5, 1, 5, or 10
-degree steps.
+The GUI checks the connected serial port periodically. If the controller is
+physically disconnected, the connection LED turns red and motion controls are
+disabled.
+
+The selected axis controls are type-aware: linear axes enable position arrows,
+and rotational axes enable angle arrows. Linear axis tabs show only position
+controls, and rotational axis tabs show only angle controls.
+
+The motion text box shows the current position or angle. Edit the value and
+press Enter to move in absolute mode. Use the arrow buttons to move by the
+selected step; arrow moves automatically switch the controller to relative
+mode. Linear axes allow 0.1, 0.5, or 1 mm steps. Rotational axes allow 0.1,
+0.5, 1, 5, or 10 degree steps.
 
 ## Python API
 
@@ -143,8 +165,8 @@ Once the connection has been established, send movement commands through the
 `SMC` object:
 
 ```python
-smc.move("Z", 0.8)   # Move the Z-axis rod linearly by 0.8 mm.
-smc.theta("X", 15)   # Rotate the X-axis plate by 15 degrees.
+smc.move("IRIS", 0.8)          # Move the Z-axis rod linearly by 0.8 mm.
+smc.theta("Goniometer", 15)    # Rotate the X-axis plate by 15 degrees.
 ```
 
 Useful status and setup methods:
@@ -152,11 +174,17 @@ Useful status and setup methods:
 ```python
 print(smc.status())      # Print cached controller status.
 print(smc.position())    # Query current positions from the controller.
-smc.feedrate("Z", 5)     # Set Z-axis feedrate.
-smc.homing_sensitivity("Z", 120)
+smc.feedrate("IRIS", 5)  # Set Z-axis feedrate.
+smc.homing_sensitivity("IRIS", 120)
 smc.relative(True)       # Enable relative movement mode.
-smc.home("X")            # Home X-axis.
+smc.home("IRIS")         # Home a linear axis.
 smc.save()               # Save configurable settings to EEPROM.
+```
+
+To change display names later, update aliases after creating the controller:
+
+```python
+smc.set_axis_alias("Z", "Probe")
 ```
 
 ## Example Script
