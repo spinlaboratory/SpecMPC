@@ -117,8 +117,9 @@ The GUI provides controls for:
 - Sending raw G-code commands.
 
 Display names, motion types, and motion limits changed in the GUI are saved
-automatically and loaded the next time the GUI starts. The config is stored in
-the package directory at `pySMC/config/config.json`. IRIS defaults to a linear
+automatically and loaded the next time the GUI starts. Repository defaults are
+stored in `pySMC/config/default_config.json`; local GUI changes are saved to
+`pySMC/config/config.json`, which is ignored by git. IRIS defaults to a linear
 range of 0 to 8. The Advanced tab also has an Override motion limits checkbox
 for deliberate out-of-range moves on the selected axis only.
 

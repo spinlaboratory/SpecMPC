@@ -32,7 +32,7 @@ pySMC-gui = "pySMC.gui:main"
 where = ["."]
 
 [tool.setuptools.package-data]
-pySMC = ["config/*.json"]
+pySMC = ["config/default_config.json"]
 
 [tool.setuptools.dynamic]
 version = { attr = "pySMC.version.__version__" }

@@ -26,6 +26,7 @@ DEFAULT_AXIS_TYPES = {'X': 'r', 'Y': 'l', 'Z': 'l', 'E': 'l'}
 DEFAULT_AXIS_LIMITS = {'Z': {'min': 0.0, 'max': 8.0}}
 CONFIG_DIR = Path(__file__).resolve().parent / 'config'
 CONFIG_PATH = CONFIG_DIR / 'config.json'
+DEFAULT_CONFIG_PATH = CONFIG_DIR / 'default_config.json'
 HEALTH_CHECK_INTERVAL_MS = 1000
 AXIS_TYPE_LABELS = {'l': 'Linear', 'r': 'Rotation'}
 AXIS_TYPE_VALUES = {label: axis_type for axis_type, label in AXIS_TYPE_LABELS.items()}
@@ -33,23 +34,27 @@ AXIS_TYPE_VALUES = {label: axis_type for axis_type, label in AXIS_TYPE_LABELS.it
 
 def _load_config():
     """
-    Load GUI settings from the package config file.
+    Load GUI settings from shipped defaults and local overrides.
 
     Returns:
-        A settings dictionary. Missing or invalid config files return an empty
-        dictionary.
+        A settings dictionary. Local values in ``config.json`` override the
+        repository defaults in ``default_config.json``.
     """
-    try:
-        with CONFIG_PATH.open('r', encoding='utf-8') as config_file:
-            config = json.load(config_file)
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return config if isinstance(config, dict) else {}
+    config = {}
+    for path in (DEFAULT_CONFIG_PATH, CONFIG_PATH):
+        try:
+            with path.open('r', encoding='utf-8') as config_file:
+                loaded_config = json.load(config_file)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(loaded_config, dict):
+            config.update(loaded_config)
+    return config
 
 
 def _load_saved_axis_aliases():
     """
-    Load saved GUI axis aliases from the package config file.
+    Load saved GUI axis aliases.
 
     Returns:
         Saved aliases keyed by controller axis, or an empty dictionary when no
@@ -64,7 +69,7 @@ def _load_saved_axis_aliases():
 
 def _load_saved_axis_types():
     """
-    Load saved GUI axis motion types from the package config file.
+    Load saved GUI axis motion types.
 
     Returns:
         Saved axis types keyed by controller axis. Only ``"l"`` and ``"r"``
@@ -83,7 +88,7 @@ def _load_saved_axis_types():
 
 def _load_saved_axis_limits():
     """
-    Load saved motion limits from the package config file.
+    Load saved motion limits.
 
     Returns:
         Mapping of controller axis to ``{"min": value, "max": value}``.
@@ -113,7 +118,7 @@ def _load_saved_axis_limits():
 
 def _save_config(axis_aliases, axis_types, axis_limits):
     """
-    Save GUI axis settings to the package config file.
+    Save local GUI axis settings.
 
     Args:
         axis_aliases: Mapping of controller axis to display alias.
