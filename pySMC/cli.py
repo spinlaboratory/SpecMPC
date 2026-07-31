@@ -129,11 +129,13 @@ class SMCControlPanel(cmd.Cmd):
         """
         print("Use: function_name [arg ...] [keyword=value ...]")
         print("Examples:")
-        print("  move Z 0.8")
-        print("  theta X 15")
-        print("  feedrate Z 5")
+        print("  move IRIS 0.8")
+        print("  theta Goniometer 15")
+        print("  feedrate IRIS 5")
+        print("  set_axis_alias Z Probe")
         print("  send_command M114 true")
         print("  relative true")
+        print("Axis aliases are display names only; controller commands still use X/Y/Z/E.")
         print()
         self.smc.help()
 

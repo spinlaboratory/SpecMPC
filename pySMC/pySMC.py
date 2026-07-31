@@ -11,9 +11,10 @@ import serial
 import serial.tools.list_ports
 import time
 import re
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 MAX_ATTEMPTS = 50
+DEFAULT_AXIS_ALIASES = {'X': 'Goniometer', 'Z': 'IRIS'}
 
 
 def _to_float(value, name):
@@ -69,7 +70,17 @@ class SMC:
     resolution, current, and movement mode.
     """
 
-    def __init__(self, port: str = None, baud_rate = 250000, write_timeout = 0, timeout = 1, axis: Optional[List[str]] = None, axis_types: Optional[List[str]] = None, verbose = 0):
+    def __init__(
+        self,
+        port: str = None,
+        baud_rate=250000,
+        write_timeout=0,
+        timeout=1,
+        axis: Optional[List[str]] = None,
+        axis_types: Optional[List[str]] = None,
+        axis_aliases: Optional[Dict[str, str]] = None,
+        verbose=0,
+    ):
         """
         Connect to the controller and initialize cached axis settings.
 
@@ -82,6 +93,9 @@ class SMC:
             axis: Axis names managed by the controller.
             axis_types: Axis type for each axis, where ``"r"`` is rotational
                 and ``"l"`` is linear.
+            axis_aliases: Optional display names keyed by controller axis.
+                Aliases are accepted as input, but G-code still uses the
+                underlying controller axis letter.
             verbose: Console output level. Values greater than or equal to 1
                 print connection and validation messages.
 
@@ -99,6 +113,11 @@ class SMC:
         self.__autoConnectSMCSerialPort(port, baud_rate, write_timeout, timeout)
         self.axis = axis
         self.types = axis_types # r: rotational, l: linear
+        self.axis_aliases = {axis_name: DEFAULT_AXIS_ALIASES.get(axis_name, axis_name) for axis_name in self.axis}
+        if axis_aliases:
+            for axis_name, alias in axis_aliases.items():
+                self.set_axis_alias(axis_name, alias)
+        self._update_axis_alias_lookup()
         self.positions = self.position()
         self.feedrates = self.feedrate() # unit per second
         self.homing_sensitivities = self.homing_sensitivity()
@@ -109,16 +128,65 @@ class SMC:
         if self.verbose >= 1:
             print('Stepper motor controller is connected')
 
+    def _update_axis_alias_lookup(self):
+        """
+        Rebuild the lookup table used to accept axis letters and aliases.
+        """
+        self._axis_alias_lookup = {axis.upper(): axis for axis in self.axis}
+        for axis, alias in self.axis_aliases.items():
+            self._axis_alias_lookup[str(alias).upper()] = axis
+
+    def _resolve_axis(self, axis):
+        """
+        Convert an axis alias or letter into the controller axis letter.
+        """
+        if axis is None:
+            return None
+        return self._axis_alias_lookup.get(str(axis).upper(), axis)
+
+    def axis_label(self, axis):
+        """
+        Return the display label for an axis.
+
+        Args:
+            axis: Controller axis letter or alias.
+
+        Returns:
+            Display alias for the axis, or the original value if unknown.
+        """
+        resolved_axis = self._resolve_axis(axis)
+        return self.axis_aliases.get(resolved_axis, axis)
+
+    def set_axis_alias(self, axis, alias):
+        """
+        Set a display-only alias for a controller axis.
+
+        Args:
+            axis: Controller axis letter, such as ``"Z"``.
+            alias: Display name to use for the axis.
+
+        Returns:
+            ``True`` when the alias is updated, or ``False`` for an invalid
+            controller axis.
+        """
+        axis = str(axis).upper()
+        if axis not in self.axis:
+            return False
+        self.axis_aliases[axis] = str(alias)
+        self._update_axis_alias_lookup()
+        return True
+
     def help(self):
         """
         Print a compact command reference for the interactive control panel.
 
         The output uses the same command syntax accepted by the ``pySMC``
-        terminal command, for example ``move Z 0.8`` or ``relative true``.
+        terminal command, for example ``move IRIS 0.8`` or ``relative true``.
         """
         commands = [
             ('status', 'Show movement mode, position, feedrate, steps/unit, and current.'),
             ('info', 'Alias for status.'),
+            ('set_axis_alias AXIS NAME', 'Set a display-only alias for an axis.'),
             ('move AXIS POSITION', 'Move a linear axis.'),
             ('theta AXIS DEGREE', 'Rotate an axis.'),
             ('feedrate [AXIS FEEDRATE]', 'Read or set feedrate.'),
@@ -136,9 +204,10 @@ class SMC:
             ('exit', 'Leave the control panel.'),
         ]
         examples = [
-            'move Z 0.8',
-            'theta X 15',
-            'feedrate Z 5',
+            'move IRIS 0.8',
+            'theta Goniometer 15',
+            'feedrate IRIS 5',
+            'set_axis_alias Z Probe',
             'send_command M114 true',
         ]
 
@@ -146,6 +215,7 @@ class SMC:
         print('')
         print('Usage:')
         print('  command [arguments]')
+        print('  Axis aliases are display names only; controller commands still use X/Y/Z/E.')
         print('')
         print('Commands:')
         for command, description in commands:
@@ -167,11 +237,12 @@ class SMC:
         s += 'Movement Mode: Relative\n' if self.relative_mode else 'Movement Mode: Absolute\n'
         # print('Movement Mode: Relative') if self.relative_mode else print('Movement Mode: Absolute')
         for axis in self.axis:
-            s += '%s current position: %s\n' %(axis, self.positions[axis])
-            s += '%s feedrate: %s\n' %(axis, self.feedrates[axis])
-            s += '%s homing sensitivity: %s\n' %(axis, self.homing_sensitivities[axis])
-            s += '%s steps/unit: %s\n' %(axis, self.resolutions[axis])
-            s += '%s current: %s mA\n' %(axis, self.currents[axis])
+            label = self.axis_label(axis)
+            s += '%s current position: %s\n' %(label, self.positions[axis])
+            s += '%s feedrate: %s\n' %(label, self.feedrates[axis])
+            s += '%s homing sensitivity: %s\n' %(label, self.homing_sensitivities[axis])
+            s += '%s steps/unit: %s\n' %(label, self.resolutions[axis])
+            s += '%s current: %s mA\n' %(label, self.currents[axis])
 
         return s
 
@@ -217,6 +288,7 @@ class SMC:
                 print(error)
             return False
 
+        axis = self._resolve_axis(axis)
         self.relative(self.relative_mode)
 
         if axis not in self.axis:
@@ -258,6 +330,7 @@ class SMC:
                 print(error)
             return False
 
+        axis = self._resolve_axis(axis)
         self.relative(self.relative_mode)
 
         if axis not in self.axis:
@@ -302,6 +375,7 @@ class SMC:
 
         '''
         if feedrate is not None:
+            axis = self._resolve_axis(axis)
             if not axis or axis not in self.axis: 
                 if self.verbose >= 1:
                     print('Please provide correct axis.')
@@ -334,6 +408,7 @@ class SMC:
 
         '''
         if sensitivity is not None:
+            axis = self._resolve_axis(axis)
             if not axis or axis not in self.axis:
                 if self.verbose >= 1:
                     print('Please provide correct axis.')
@@ -359,6 +434,7 @@ class SMC:
             for an invalid axis, otherwise ``None`` after a successful write.
         '''
         if position is not None:
+            axis = self._resolve_axis(axis)
             if not axis or axis not in self.axis: 
                 if self.verbose >= 1:
                     print('Please provide correct axis.')
@@ -382,42 +458,42 @@ class SMC:
     
     def home(self, axis: Optional[str] = None):
         '''
-        Move one or all axes back to their configured home position.
+        Home one or all linear axes with the controller ``G28`` command.
 
         Args:
             axis: Axis name to home. If omitted, all configured axes are homed.
 
         Returns:
-            ``True`` when homing succeeds, or ``False`` if an axis is invalid
-            or has an unsupported axis type.
+            ``True`` when the homing command is sent, or ``False`` if an axis
+            is invalid or rotational.
             
         '''
-        if not axis:
-            for axis in self.axis:
-                if not self.home(axis):
-                    if self.verbose >= 1:
-                        print(axis, 'homing fails')
-                    return False
+        if axis is None:
+            linear_axes = [axis for axis, axis_type in zip(self.axis, self.types) if axis_type == 'l']
+            if not linear_axes:
+                if self.verbose >= 1:
+                    print('No linear axis is available to home.')
+                return False
+            self.send_command('G28 %s'%(' '.join(linear_axes)))
+            time.sleep(10)
+            self.positions = self.position()
             return True
-            
-        else:
-            if axis not in self.axis:
-                if self.verbose >= 1:
-                    print('Please provide correct axis.')
-                return False
 
-            axis_type = self.types[self.axis.index(axis)]
-            if axis_type == 'l':
-                self.move(axis, 0)
-                return True
-            
-            elif axis_type == 'r':
-                self.theta(axis, 0)
-                return True
-            else:
-                if self.verbose >= 1:
-                    print('Axis type is not supported.')
-                return False
+        axis = self._resolve_axis(axis)
+        if axis not in self.axis:
+            if self.verbose >= 1:
+                print('Please provide correct axis.')
+            return False
+
+        if self.types[self.axis.index(axis)] != 'l':
+            if self.verbose >= 1:
+                print('Only linear axes can be homed.')
+            return False
+
+        self.send_command('G28 %s'%(axis))
+        time.sleep(10)
+        self.positions = self.position()
+        return True
     
     def set_home(self, axis: Optional[str] = None):
         '''
@@ -438,6 +514,7 @@ class SMC:
                     return False
             return True
         else:
+            axis = self._resolve_axis(axis)
             return self.position(axis, 0) is not False
         
     def current(self, axis: Optional[str] = None, current: Optional[Union[float, int]] = None):
@@ -455,6 +532,7 @@ class SMC:
 
         '''
         if current is not None:
+            axis = self._resolve_axis(axis)
             if not axis or axis not in self.axis: 
                 if self.verbose >= 1:
                     print('Please provide correct axis.')
@@ -486,6 +564,7 @@ class SMC:
 
         '''
         if step is not None:
+            axis = self._resolve_axis(axis)
             if not axis or axis not in self.axis: 
                 if self.verbose >= 1:
                     print('Please provide correct axis.')

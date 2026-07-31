@@ -31,5 +31,8 @@ pySMC-gui = "pySMC.gui:main"
 [tool.setuptools.packages.find]
 where = ["."]
 
+[tool.setuptools.package-data]
+pySMC = ["config/*.json"]
+
 [tool.setuptools.dynamic]
 version = { attr = "pySMC.version.__version__" }

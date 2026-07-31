@@ -1,0 +1,8 @@
+{
+  "axis_aliases": {
+    "E": "E",
+    "X": "Goniometer",
+    "Y": "Y",
+    "Z": "IRIS"
+  }
+}
