@@ -1,2 +1,2 @@
-from .pySMC import *
+from .specMPC import *
 from .version import __version__
