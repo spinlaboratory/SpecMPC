@@ -4,7 +4,7 @@ import cmd
 import pprint
 import shlex
 
-from .pySMC import SMC
+from .SpecMPC import MPC
 from .version import __version__
 
 
@@ -38,7 +38,7 @@ def _parse_call(line: str):
     Parse an interactive command line into a function call.
 
     Args:
-        line: Raw text entered at the ``pySMC>`` prompt.
+        line: Raw text entered at the ``SpecMPC>`` prompt.
 
     Returns:
         A tuple of ``(command, args, kwargs)``. Empty input returns
@@ -62,26 +62,26 @@ def _parse_call(line: str):
     return command, args, kwargs
 
 
-class SMCControlPanel(cmd.Cmd):
+class MPCControlPanel(cmd.Cmd):
     """
-    Interactive terminal control panel for an :class:`pySMC.pySMC.SMC` object.
+    Interactive terminal control panel for an :class:`SpecMPC.SpecMPC.MPC` object.
 
-    Public methods on the wrapped ``SMC`` instance can be called by typing the
+    Public methods on the wrapped ``MPC`` instance can be called by typing the
     method name followed by positional arguments or ``key=value`` arguments.
     """
 
     intro = (
-        "pySMC control panel. Type help for commands, status for current SMC "
+        "SpecMPC control panel. Type help for commands, status for current MPC "
         "state, or exit to quit."
     )
-    prompt = "pySMC> "
+    prompt = "SpecMPC> "
 
-    def __init__(self, smc: SMC):
+    def __init__(self, smc: MPC):
         """
         Create a control panel bound to an existing controller instance.
 
         Args:
-            smc: Connected ``SMC`` instance used to execute commands.
+            smc: Connected ``MPC`` instance used to execute commands.
         """
         super().__init__()
         self.smc = smc
@@ -103,7 +103,7 @@ class SMCControlPanel(cmd.Cmd):
 
         method = getattr(self.smc, command, None)
         if method is None or not callable(method):
-            print(f"Unknown SMC function: {command}")
+            print(f"Unknown MPC function: {command}")
             return
 
         try:
@@ -122,7 +122,7 @@ class SMCControlPanel(cmd.Cmd):
 
     def do_help(self, arg: str):
         """
-        Print control panel usage and SMC command help.
+        Print control panel usage and MPC command help.
 
         Args:
             arg: Unused text following the ``help`` command.
@@ -194,14 +194,14 @@ class SMCControlPanel(cmd.Cmd):
 
 def build_parser():
     """
-    Build the command-line argument parser for the ``pySMC`` command.
+    Build the command-line argument parser for the ``SpecMPC`` command.
 
     Returns:
         Configured ``argparse.ArgumentParser`` instance.
     """
     parser = argparse.ArgumentParser(
-        prog="pySMC",
-        description="Open an interactive control panel for a Stepper Motor Controller.",
+        prog="SpecMPC",
+        description="Open an interactive control panel for a Motorized Probe Controller.",
     )
     parser.add_argument(
         "-p",
@@ -241,21 +241,21 @@ def build_parser():
 
 def main(argv=None):
     """
-    Run the ``pySMC`` console command.
+    Run the ``SpecMPC`` console command.
 
     Args:
         argv: Optional argument list. When omitted, arguments are read from
             ``sys.argv`` by ``argparse``.
     """
     args = build_parser().parse_args(argv)
-    smc = SMC(
+    smc = MPC(
         port=args.port,
         baud_rate=args.baud_rate,
         write_timeout=args.write_timeout,
         timeout=args.timeout,
         verbose=args.verbose,
     )
-    SMCControlPanel(smc).cmdloop()
+    MPCControlPanel(smc).cmdloop()
 
 
 if __name__ == "__main__":

@@ -60,9 +60,9 @@ def _parse_homing_sensitivity_response(response, axes):
     return sensitivities
 
 
-class SMC:
+class MPC:
     """
-    Serial interface for a Stepper Motor Controller running Marlin G-code.
+    Serial interface for a Motorized Probe Controller running Marlin G-code.
 
     The class wraps common controller operations such as movement, homing,
     status queries, and EEPROM settings. It opens a serial connection during
@@ -85,7 +85,7 @@ class SMC:
         Connect to the controller and initialize cached axis settings.
 
         Args:
-            port: Serial port name such as ``"COM3"``. If omitted, pySMC
+            port: Serial port name such as ``"COM3"``. If omitted, SpecMPC
                 attempts to auto-detect the controller.
             baud_rate: Serial baud rate used for the connection.
             write_timeout: Serial write timeout in seconds.
@@ -110,7 +110,7 @@ class SMC:
         if len(axis) != len(axis_types):
             raise ValueError('axis and axis_types must have the same length')
 
-        self.__autoConnectSMCSerialPort(port, baud_rate, write_timeout, timeout)
+        self.__autoConnectMPCSerialPort(port, baud_rate, write_timeout, timeout)
         self.axis = axis
         self.types = axis_types # r: rotational, l: linear
         self.axis_aliases = {axis_name: DEFAULT_AXIS_ALIASES.get(axis_name, axis_name) for axis_name in self.axis}
@@ -180,7 +180,7 @@ class SMC:
         """
         Print a compact command reference for the interactive control panel.
 
-        The output uses the same command syntax accepted by the ``pySMC``
+        The output uses the same command syntax accepted by the ``SpecMPC``
         terminal command, for example ``move IRIS 0.8`` or ``relative true``.
         """
         commands = [
@@ -211,7 +211,7 @@ class SMC:
             'send_command M114 true',
         ]
 
-        print('pySMC control panel')
+        print('SpecMPC control panel')
         print('')
         print('Usage:')
         print('  command [arguments]')
@@ -689,7 +689,7 @@ class SMC:
         """
         return 'Acknowledged specman connection',True
         
-    def __autoConnectSMCSerialPort(self, port, baud_rate, write_timeout, timeout):
+    def __autoConnectMPCSerialPort(self, port, baud_rate, write_timeout, timeout):
         """
         Open the serial connection to the controller.
 
@@ -735,7 +735,7 @@ class SMC:
             self.ser.close()
                 
 if __name__ == "__main__":
-    smc = SMC()
+    smc = MPC()
     print('===========================')
     smc.help()
     print('===========================')

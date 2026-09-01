@@ -1,7 +1,9 @@
-# pySMC
+# SpecMPC
 
-pySMC is a Python package for interfacing with a Stepper Motor Controller
+SpecMPC is a Python package for interfacing with a Motorized Probe Controller
 (BIGTREETECH SKR MINI E3 V3.0) used in Bruker BioSpin products.
+The name combines “spec,” short for spectrometer, with “MPC,” short for
+Motorized Probe Controller.
 
 The controller is used to:
 
@@ -16,7 +18,7 @@ The controller is used to:
 
 ## Installation
 
-From the project root, install pySMC with pip:
+From the project root, install SpecMPC with pip:
 
 ```console
 python -m pip install .
@@ -30,43 +32,43 @@ python -m pip install -e .
 
 ## Terminal Control Panel
 
-After installation, the `pySMC` command opens an interactive control panel.
+After installation, the `SpecMPC` command opens an interactive control panel.
 
 Use auto-detection:
 
 ```console
-pySMC
+SpecMPC
 ```
 
 Or specify the serial port and baud rate:
 
 ```console
-pySMC -p COM3 -b 96000
+SpecMPC -p COM3 -b 96000
 ```
 
-All connection arguments are optional. If an argument is skipped, pySMC uses
-the default value from `SMC`.
+All connection arguments are optional. If an argument is skipped, SpecMPC uses
+the default value from `MPC`.
 
 Available startup options:
 
 ```console
-pySMC [-h] [-p PORT] [-b BAUD_RATE] [--write-timeout WRITE_TIMEOUT] [--timeout TIMEOUT] [-v VERBOSE]
+SpecMPC [-h] [-p PORT] [-b BAUD_RATE] [--write-timeout WRITE_TIMEOUT] [--timeout TIMEOUT] [-v VERBOSE]
 ```
 
-Inside the control panel, call public `SMC` methods by typing the method name
+Inside the control panel, call public `MPC` methods by typing the method name
 followed by arguments:
 
 ```text
-pySMC> status
-pySMC> move IRIS 0.8
-pySMC> theta Goniometer 15
-pySMC> feedrate IRIS 5
-pySMC> set_axis_alias Z Probe
-pySMC> homing_sensitivity IRIS 120
-pySMC> relative true
-pySMC> send_command M114 true
-pySMC> help
-pySMC> exit
+SpecMPC> status
+SpecMPC> move IRIS 0.8
+SpecMPC> theta Goniometer 15
+SpecMPC> feedrate IRIS 5
+SpecMPC> set_axis_alias Z Probe
+SpecMPC> homing_sensitivity IRIS 120
+SpecMPC> relative true
+SpecMPC> send_command M114 true
+SpecMPC> help
+SpecMPC> exit
 ```
 
 Argument values such as numbers, `true`, `false`, and `none` are converted to
@@ -78,24 +80,24 @@ underlying `X`, `Y`, `Z`, or `E` axis letters.
 
 ## Graphical Control Panel
 
-pySMC also includes a Tkinter GUI. Start it with:
+SpecMPC also includes a Tkinter GUI. Start it with:
 
 ```console
-pySMC-gui
+SpecMPC-gui
 ```
 
 You can pre-fill the connection settings from the command line:
 
 ```console
-pySMC-gui -p COM3 -b 96000
+SpecMPC-gui -p COM3 -b 96000
 ```
 
 The GUI attempts to connect automatically when it opens. By default, the port
-selector uses `Auto`, which lets pySMC detect the controller. To open the GUI
+selector uses `Auto`, which lets SpecMPC detect the controller. To open the GUI
 without connecting automatically:
 
 ```console
-pySMC-gui --no-auto-connect
+SpecMPC-gui --no-auto-connect
 ```
 
 The GUI provides controls for:
@@ -118,8 +120,8 @@ The GUI provides controls for:
 
 Display names, motion types, and motion limits changed in the GUI are saved
 automatically and loaded the next time the GUI starts. Repository defaults are
-stored in `pySMC/config/default_config.json`; local GUI changes are saved to
-`pySMC/config/config.json`, which is ignored by git. IRIS defaults to a linear
+stored in `SpecMPC/config/default_config.json`; local GUI changes are saved to
+`SpecMPC/config/config.json`, which is ignored by git. IRIS defaults to a linear
 range of 0 to 8. The Advanced tab also has an Override motion limits checkbox
 for deliberate out-of-range moves on the selected axis only.
 
@@ -143,66 +145,66 @@ First, make sure the product is properly installed and connected to the
 controller. Connect the controller to the computer with a USB cable and power
 on the system.
 
-Then create an `SMC` instance:
+Then create an `MPC` instance:
 
 ```python
-import pySMC
+import SpecMPC
 
-smc = pySMC.SMC()
+mpc = SpecMPC.MPC()
 ```
 
 To specify a port and baud rate:
 
 ```python
-import pySMC
+import SpecMPC
 
-smc = pySMC.SMC(port="COM3", baud_rate=96000)
+mpc = SpecMPC.MPC(port="COM3", baud_rate=96000)
 ```
 
 ## Sending Commands
 
 Once the connection has been established, send movement commands through the
-`SMC` object:
+`MPC` object:
 
 ```python
-smc.move("IRIS", 0.8)          # Move the Z-axis rod linearly by 0.8 mm.
-smc.theta("Goniometer", 15)    # Rotate the X-axis plate by 15 degrees.
+mpc.move("IRIS", 0.8)          # Move the Z-axis rod linearly by 0.8 mm.
+mpc.theta("Goniometer", 15)    # Rotate the X-axis plate by 15 degrees.
 ```
 
 Useful status and setup methods:
 
 ```python
-print(smc.status())      # Print cached controller status.
-print(smc.position())    # Query current positions from the controller.
-smc.feedrate("IRIS", 5)  # Set Z-axis feedrate.
-smc.homing_sensitivity("IRIS", 120)
-smc.relative(True)       # Enable relative movement mode.
-smc.home("IRIS")         # Home a linear axis.
-smc.save()               # Save configurable settings to EEPROM.
+print(mpc.status())      # Print cached controller status.
+print(mpc.position())    # Query current positions from the controller.
+mpc.feedrate("IRIS", 5)  # Set Z-axis feedrate.
+mpc.homing_sensitivity("IRIS", 120)
+mpc.relative(True)       # Enable relative movement mode.
+mpc.home("IRIS")         # Home a linear axis.
+mpc.save()               # Save configurable settings to EEPROM.
 ```
 
 To change display names later, update aliases after creating the controller:
 
 ```python
-smc.set_axis_alias("Z", "Probe")
+mpc.set_axis_alias("Z", "Probe")
 ```
 
 ## Example Script
 
 ```python
-import pySMC
+import SpecMPC
 
-smc = pySMC.SMC()
+mpc = SpecMPC.MPC()
 
-smc.help()
-print(smc.status())
+mpc.help()
+print(mpc.status())
 
-smc.theta("X", 30)
-print(smc.position())
+mpc.theta("X", 30)
+print(mpc.position())
 
-smc.theta("X", -60)
-print(smc.position())
+mpc.theta("X", -60)
+print(mpc.position())
 
-smc.home("X")
-print(smc.position())
+mpc.home("X")
+print(mpc.position())
 ```
