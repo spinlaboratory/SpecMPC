@@ -85,7 +85,7 @@ class MPC:
         Connect to the controller and initialize cached axis settings.
 
         Args:
-            port: Serial port name such as ``"COM3"``. If omitted, specMPC
+            port: Serial port name such as ``"COM3"``. If omitted, SpecMPC
                 attempts to auto-detect the controller.
             baud_rate: Serial baud rate used for the connection.
             write_timeout: Serial write timeout in seconds.
@@ -180,7 +180,7 @@ class MPC:
         """
         Print a compact command reference for the interactive control panel.
 
-        The output uses the same command syntax accepted by the ``specMPC``
+        The output uses the same command syntax accepted by the ``SpecMPC``
         terminal command, for example ``move IRIS 0.8`` or ``relative true``.
         """
         commands = [
@@ -211,7 +211,7 @@ class MPC:
             'send_command M114 true',
         ]
 
-        print('specMPC control panel')
+        print('SpecMPC control panel')
         print('')
         print('Usage:')
         print('  command [arguments]')

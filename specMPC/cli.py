@@ -4,7 +4,7 @@ import cmd
 import pprint
 import shlex
 
-from .specMPC import MPC
+from .SpecMPC import MPC
 from .version import __version__
 
 
@@ -38,7 +38,7 @@ def _parse_call(line: str):
     Parse an interactive command line into a function call.
 
     Args:
-        line: Raw text entered at the ``specMPC>`` prompt.
+        line: Raw text entered at the ``SpecMPC>`` prompt.
 
     Returns:
         A tuple of ``(command, args, kwargs)``. Empty input returns
@@ -64,17 +64,17 @@ def _parse_call(line: str):
 
 class MPCControlPanel(cmd.Cmd):
     """
-    Interactive terminal control panel for an :class:`specMPC.specMPC.MPC` object.
+    Interactive terminal control panel for an :class:`SpecMPC.SpecMPC.MPC` object.
 
     Public methods on the wrapped ``MPC`` instance can be called by typing the
     method name followed by positional arguments or ``key=value`` arguments.
     """
 
     intro = (
-        "specMPC control panel. Type help for commands, status for current MPC "
+        "SpecMPC control panel. Type help for commands, status for current MPC "
         "state, or exit to quit."
     )
-    prompt = "specMPC> "
+    prompt = "SpecMPC> "
 
     def __init__(self, smc: MPC):
         """
@@ -194,13 +194,13 @@ class MPCControlPanel(cmd.Cmd):
 
 def build_parser():
     """
-    Build the command-line argument parser for the ``specMPC`` command.
+    Build the command-line argument parser for the ``SpecMPC`` command.
 
     Returns:
         Configured ``argparse.ArgumentParser`` instance.
     """
     parser = argparse.ArgumentParser(
-        prog="specMPC",
+        prog="SpecMPC",
         description="Open an interactive control panel for a Motorized Probe Controller.",
     )
     parser.add_argument(
@@ -241,7 +241,7 @@ def build_parser():
 
 def main(argv=None):
     """
-    Run the ``specMPC`` console command.
+    Run the ``SpecMPC`` console command.
 
     Args:
         argv: Optional argument list. When omitted, arguments are read from

@@ -10,7 +10,7 @@ from tkinter import messagebox, scrolledtext, ttk
 import serial
 import serial.tools.list_ports
 
-from .specMPC import DEFAULT_AXIS_ALIASES, MPC
+from .SpecMPC import DEFAULT_AXIS_ALIASES, MPC
 from .version import __version__
 
 
@@ -157,7 +157,7 @@ class MPCGui(tk.Tk):
             axis_aliases: Optional display aliases keyed by controller axis.
         """
         super().__init__()
-        self.title('specMPC Control Panel')
+        self.title('SpecMPC Control Panel')
         self.geometry('560x620')
         self.minsize(520, 560)
 
@@ -1908,14 +1908,14 @@ class MPCGui(tk.Tk):
 
 def build_parser():
     """
-    Build the command-line parser for ``specMPC-gui``.
+    Build the command-line parser for ``SpecMPC-gui``.
 
     Returns:
         Configured ``argparse.ArgumentParser`` instance.
     """
     parser = argparse.ArgumentParser(
-        prog='specMPC-gui',
-        description='Open the specMPC graphical control panel.',
+        prog='SpecMPC-gui',
+        description='Open the SpecMPC graphical control panel.',
     )
     parser.add_argument('-p', '--port', default=None, help='Serial port to pre-fill, such as COM3.')
     parser.add_argument('-b', '--baud-rate', type=int, default=DEFAULT_BAUD_RATE, help='Serial baud rate. Defaults to 250000.')
@@ -1928,7 +1928,7 @@ def build_parser():
 
 def main(argv=None):
     """
-    Run the ``specMPC-gui`` command.
+    Run the ``SpecMPC-gui`` command.
 
     Args:
         argv: Optional argument list. When omitted, arguments are read from

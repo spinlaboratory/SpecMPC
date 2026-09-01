@@ -1,6 +1,6 @@
-# specMPC
+# SpecMPC
 
-specMPC is a Python package for interfacing with a Motorized Probe Controller
+SpecMPC is a Python package for interfacing with a Motorized Probe Controller
 (BIGTREETECH SKR MINI E3 V3.0) used in Bruker BioSpin products.
 The name combines “spec,” short for spectrometer, with “MPC,” short for
 Motorized Probe Controller.
@@ -18,7 +18,7 @@ The controller is used to:
 
 ## Installation
 
-From the project root, install specMPC with pip:
+From the project root, install SpecMPC with pip:
 
 ```console
 python -m pip install .
@@ -32,43 +32,43 @@ python -m pip install -e .
 
 ## Terminal Control Panel
 
-After installation, the `specMPC` command opens an interactive control panel.
+After installation, the `SpecMPC` command opens an interactive control panel.
 
 Use auto-detection:
 
 ```console
-specMPC
+SpecMPC
 ```
 
 Or specify the serial port and baud rate:
 
 ```console
-specMPC -p COM3 -b 96000
+SpecMPC -p COM3 -b 96000
 ```
 
-All connection arguments are optional. If an argument is skipped, specMPC uses
+All connection arguments are optional. If an argument is skipped, SpecMPC uses
 the default value from `MPC`.
 
 Available startup options:
 
 ```console
-specMPC [-h] [-p PORT] [-b BAUD_RATE] [--write-timeout WRITE_TIMEOUT] [--timeout TIMEOUT] [-v VERBOSE]
+SpecMPC [-h] [-p PORT] [-b BAUD_RATE] [--write-timeout WRITE_TIMEOUT] [--timeout TIMEOUT] [-v VERBOSE]
 ```
 
 Inside the control panel, call public `MPC` methods by typing the method name
 followed by arguments:
 
 ```text
-specMPC> status
-specMPC> move IRIS 0.8
-specMPC> theta Goniometer 15
-specMPC> feedrate IRIS 5
-specMPC> set_axis_alias Z Probe
-specMPC> homing_sensitivity IRIS 120
-specMPC> relative true
-specMPC> send_command M114 true
-specMPC> help
-specMPC> exit
+SpecMPC> status
+SpecMPC> move IRIS 0.8
+SpecMPC> theta Goniometer 15
+SpecMPC> feedrate IRIS 5
+SpecMPC> set_axis_alias Z Probe
+SpecMPC> homing_sensitivity IRIS 120
+SpecMPC> relative true
+SpecMPC> send_command M114 true
+SpecMPC> help
+SpecMPC> exit
 ```
 
 Argument values such as numbers, `true`, `false`, and `none` are converted to
@@ -80,24 +80,24 @@ underlying `X`, `Y`, `Z`, or `E` axis letters.
 
 ## Graphical Control Panel
 
-specMPC also includes a Tkinter GUI. Start it with:
+SpecMPC also includes a Tkinter GUI. Start it with:
 
 ```console
-specMPC-gui
+SpecMPC-gui
 ```
 
 You can pre-fill the connection settings from the command line:
 
 ```console
-specMPC-gui -p COM3 -b 96000
+SpecMPC-gui -p COM3 -b 96000
 ```
 
 The GUI attempts to connect automatically when it opens. By default, the port
-selector uses `Auto`, which lets specMPC detect the controller. To open the GUI
+selector uses `Auto`, which lets SpecMPC detect the controller. To open the GUI
 without connecting automatically:
 
 ```console
-specMPC-gui --no-auto-connect
+SpecMPC-gui --no-auto-connect
 ```
 
 The GUI provides controls for:
@@ -120,8 +120,8 @@ The GUI provides controls for:
 
 Display names, motion types, and motion limits changed in the GUI are saved
 automatically and loaded the next time the GUI starts. Repository defaults are
-stored in `specMPC/config/default_config.json`; local GUI changes are saved to
-`specMPC/config/config.json`, which is ignored by git. IRIS defaults to a linear
+stored in `SpecMPC/config/default_config.json`; local GUI changes are saved to
+`SpecMPC/config/config.json`, which is ignored by git. IRIS defaults to a linear
 range of 0 to 8. The Advanced tab also has an Override motion limits checkbox
 for deliberate out-of-range moves on the selected axis only.
 
@@ -148,17 +148,17 @@ on the system.
 Then create an `MPC` instance:
 
 ```python
-import specMPC
+import SpecMPC
 
-mpc = specMPC.MPC()
+mpc = SpecMPC.MPC()
 ```
 
 To specify a port and baud rate:
 
 ```python
-import specMPC
+import SpecMPC
 
-mpc = specMPC.MPC(port="COM3", baud_rate=96000)
+mpc = SpecMPC.MPC(port="COM3", baud_rate=96000)
 ```
 
 ## Sending Commands
@@ -192,9 +192,9 @@ mpc.set_axis_alias("Z", "Probe")
 ## Example Script
 
 ```python
-import specMPC
+import SpecMPC
 
-mpc = specMPC.MPC()
+mpc = SpecMPC.MPC()
 
 mpc.help()
 print(mpc.status())
