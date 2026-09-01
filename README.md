@@ -17,6 +17,10 @@ The controller is used to:
 - pySerial
 
 ## Installation
+Install through PyPI:
+```console
+python -m pip install SpecMPC
+```
 
 From the project root, install SpecMPC with pip:
 
