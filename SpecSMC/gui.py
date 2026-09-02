@@ -10,7 +10,7 @@ from tkinter import messagebox, scrolledtext, ttk
 import serial
 import serial.tools.list_ports
 
-from .SpecMPC import DEFAULT_AXIS_ALIASES, MPC
+from .SpecSMC import DEFAULT_AXIS_ALIASES, SMC
 from .version import __version__
 
 
@@ -136,11 +136,11 @@ def _save_config(axis_aliases, axis_types, axis_limits):
         config_file.write('\n')
 
 
-class MPCGui(tk.Tk):
+class SMCGui(tk.Tk):
     """
-    Tkinter desktop control panel for a Motorized Probe Controller.
+    Tkinter desktop control panel for a Stepper Motor Controller.
 
-    The GUI owns one optional ``MPC`` instance and runs serial operations in a
+    The GUI owns one optional ``SMC`` instance and runs serial operations in a
     background thread so long-running moves do not block the interface.
     """
 
@@ -157,7 +157,7 @@ class MPCGui(tk.Tk):
             axis_aliases: Optional display aliases keyed by controller axis.
         """
         super().__init__()
-        self.title('SpecMPC Control Panel')
+        self.title('SpecSMC Control Panel')
         self.geometry('560x620')
         self.minsize(520, 560)
 
@@ -528,7 +528,7 @@ class MPCGui(tk.Tk):
 
         def task():
             axis_types = [self.axis_types.get(axis, DEFAULT_AXIS_TYPES.get(axis, 'l')) for axis in CONTROLLER_AXIS_ORDER]
-            return MPC(
+            return SMC(
                 port=port,
                 baud_rate=baud_rate,
                 write_timeout=write_timeout,
@@ -550,7 +550,7 @@ class MPCGui(tk.Tk):
             self._start_connection_health_check()
             self._update_value_fields()
             self._update_axis_controls()
-            self._log('Connected to MPC.')
+            self._log('Connected to SMC.')
             self._log(self.smc.status())
 
         self._run_task(task, done, 'Connection failed')
@@ -615,12 +615,12 @@ class MPCGui(tk.Tk):
 
         ser = getattr(self.smc, 'ser', None)
         if not ser or not ser.is_open:
-            self._connection_lost('Motorized Probe Controller serial port is closed.')
+            self._connection_lost('Stepper Motor Controller serial port is closed.')
             return
 
         port_name = self._connected_port_name()
         if not self._connected_port_available():
-            self._connection_lost(f'Motorized Probe Controller disconnected from {port_name}.')
+            self._connection_lost(f'Stepper Motor Controller disconnected from {port_name}.')
             return
 
         self._start_connection_health_check()
@@ -1432,7 +1432,7 @@ class MPCGui(tk.Tk):
         if error is not None:
             self._log(f'{type(error).__name__}: {error}')
             if isinstance(error, (OSError, serial.SerialException)) or not self._connected_port_available():
-                self._connection_lost('Motorized Probe Controller connection was lost.')
+                self._connection_lost('Stepper Motor Controller connection was lost.')
             messagebox.showerror('Command failed', str(error))
             return
 
@@ -1485,7 +1485,7 @@ class MPCGui(tk.Tk):
         Update the display-only alias for the selected settings axis.
         """
         if not self.smc:
-            messagebox.showerror('Not connected', 'Connect to the MPC first.')
+            messagebox.showerror('Not connected', 'Connect to the SMC first.')
             return
 
         axis = self._selected_settings_axis()
@@ -1674,7 +1674,7 @@ class MPCGui(tk.Tk):
 
     def _call_smc(self, task, success_message, refresh_status=True, false_is_error=True, update_values=False, change_message=None):
         """
-        Run an MPC operation if connected.
+        Run an SMC operation if connected.
 
         Args:
             task: Callable that executes the controller operation.
@@ -1689,7 +1689,7 @@ class MPCGui(tk.Tk):
                 message for the operation log.
         """
         if not self.smc:
-            messagebox.showerror('Not connected', 'Connect to the MPC first.')
+            messagebox.showerror('Not connected', 'Connect to the SMC first.')
             return
 
         def done(result):
@@ -1759,7 +1759,7 @@ class MPCGui(tk.Tk):
         self._set_busy(False)
         self._log(f'{type(error).__name__}: {error}')
         if isinstance(error, (OSError, serial.SerialException)) or not self._connected_port_available():
-            self._connection_lost('Motorized Probe Controller connection was lost.')
+            self._connection_lost('Stepper Motor Controller connection was lost.')
         messagebox.showerror(title, str(error))
 
     def _set_busy(self, busy):
@@ -1908,14 +1908,14 @@ class MPCGui(tk.Tk):
 
 def build_parser():
     """
-    Build the command-line parser for ``SpecMPC-gui``.
+    Build the command-line parser for ``SpecSMC-gui``.
 
     Returns:
         Configured ``argparse.ArgumentParser`` instance.
     """
     parser = argparse.ArgumentParser(
-        prog='SpecMPC-gui',
-        description='Open the SpecMPC graphical control panel.',
+        prog='SpecSMC-gui',
+        description='Open the SpecSMC graphical control panel.',
     )
     parser.add_argument('-p', '--port', default=None, help='Serial port to pre-fill, such as COM3.')
     parser.add_argument('-b', '--baud-rate', type=int, default=DEFAULT_BAUD_RATE, help='Serial baud rate. Defaults to 250000.')
@@ -1928,14 +1928,14 @@ def build_parser():
 
 def main(argv=None):
     """
-    Run the ``SpecMPC-gui`` command.
+    Run the ``SpecSMC-gui`` command.
 
     Args:
         argv: Optional argument list. When omitted, arguments are read from
             ``sys.argv`` by ``argparse``.
     """
     args = build_parser().parse_args(argv)
-    app = MPCGui(
+    app = SMCGui(
         port=args.port,
         baud_rate=args.baud_rate,
         write_timeout=args.write_timeout,

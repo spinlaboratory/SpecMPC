@@ -123,5 +123,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Local SpecMPC GUI settings
-SpecMPC/config/config.json
+# Local SpecSMC GUI settings
+SpecSMC/config/config.json

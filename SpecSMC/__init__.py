@@ -1,2 +1,2 @@
-from .SpecMPC import *
+from .SpecSMC import *
 from .version import __version__
