@@ -1,19 +1,20 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "SpecMPC"
+name = "SpecSMC"
 dynamic = ["version"]
 authors = [
     { name = "Bruker BioSpin", email = "yen-chun.huang@bruker.com" },
 ]
-description = "A Python package for interfacing with the Motorized Probe Controller used in Bruker spectrometers."
+description = "A Python package for controlling the probe iris and QLP probes in Bruker BioSpin spectrometers."
 readme = "README.md"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
@@ -22,17 +23,17 @@ dependencies = [
 ]
 
 [project.urls]
-"Source Code" = "https://github.com/spinlaboratory/SpecMPC"
+"Source Code" = "https://github.com/spinlaboratory/SpecSMC"
 
 [project.scripts]
-SpecMPC = "SpecMPC.cli:main"
-SpecMPC-gui = "SpecMPC.gui:main"
+SpecSMC = "SpecSMC.cli:main"
+SpecSMC-gui = "SpecSMC.gui:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
 
 [tool.setuptools.package-data]
-SpecMPC = ["config/default_config.json"]
+SpecSMC = ["config/default_config.json"]
 
 [tool.setuptools.dynamic]
-version = { attr = "SpecMPC.version.__version__" }
+version = { attr = "SpecSMC.version.__version__" }
